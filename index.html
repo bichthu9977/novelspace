@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NovelSpace - Demo UI</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand" id="homeBtn">NovelSpace</div>
+
+      <div class="search-wrap">
+        <input id="searchInput" type="text" placeholder="Tìm truyện, tác giả, tag..." />
+        <button id="searchBtn" type="button">Tìm</button>
+      </div>
+
+      <nav class="nav">
+        <a href="#" id="homeLink">Trang chủ</a>
+        <a href="#" id="rankingLink">BXH</a>
+        <a href="#" id="categoryLink">Thể loại</a>
+        <a href="#" id="shelfLink">Tủ sách</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section id="homeView" class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-block">
+          <div class="section-title">Danh mục nhanh</div>
+          <ul class="menu-list">
+            <li><a href="#" data-chip="all">Tất cả</a></li>
+            <li><a href="#" data-chip="Ngôn tình">Ngôn tình</a></li>
+            <li><a href="#" data-chip="Xuyên không">Xuyên không</a></li>
+            <li><a href="#" data-chip="Cổ đại">Cổ đại</a></li>
+            <li><a href="#" data-chip="Hiện đại">Hiện đại</a></li>
+            <li><a href="#" data-chip="Sủng">Sủng</a></li>
+            <li><a href="#" data-chip="Chữa lành">Chữa lành</a></li>
+          </ul>
+        </div>
+
+        <div class="sidebar-block">
+          <div class="section-title">Bảng xếp hạng</div>
+          <ol class="ranking-list" id="rankingList">
+            <li data-book-id="5">Hầu Gia Đừng Quá Dịu Dàng</li>
+            <li data-book-id="1">Sau Khi Xuyên Sách Ta Thành Nữ Phụ</li>
+            <li data-book-id="4">Trọng Sinh Thành Tiểu Tổ Tông</li>
+            <li data-book-id="3">Vương Gia Hôm Nay Cũng Ghen</li>
+            <li data-book-id="2">Gặp Em Giữa Mùa Hoa Rụng</li>
+          </ol>
+        </div>
+      </aside>
+
+      <section class="content">
+        <div class="panel hero">
+          <div class="hero-copy">
+            <h1>Kho truyện online theo phong cách cổ điển</h1>
+            <p>
+              Bản này dùng ảnh local trong thư mục project, có phân trang danh sách truyện, reader nhiều chương và lưu truyện vào tủ sách bằng localStorage.
+            </p>
+            <div class="hero-actions">
+              <button class="solid-btn" id="scrollBooksBtn" type="button">Xem truyện nổi bật</button>
+              <button class="ghost-btn" id="openFeaturedBtn" type="button">Đọc thử ngay</button>
+            </div>
+          </div>
+
+          <div class="hero-card">
+            <span class="hero-badge">Truyện đề cử hôm nay</span>
+            <div class="hero-book">
+              <img
+                class="cover cover-hero"
+                src="images/book1.jpg"
+                alt="Bìa truyện đề cử"
+                onerror="this.src='images/default.jpg'"
+              />
+              <div>
+                <h3>Sau Khi Xuyên Sách Ta Thành Nữ Phụ</h3>
+                <p>Một câu chuyện nhẹ nhàng, hài hước, có sủng và drama vừa đủ.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel toolbar">
+          <div class="filters">
+            <select id="sortSelect">
+              <option value="popular">Sắp xếp: Phổ biến</option>
+              <option value="title">Sắp xếp: A → Z</option>
+              <option value="chapters">Sắp xếp: Tổng số chương</option>
+            </select>
+            <input id="authorFilter" type="text" placeholder="Lọc theo tác giả" />
+          </div>
+
+          <div class="chip-group" id="chipGroup">
+            <button class="chip-btn active" data-chip="all" type="button">Tất cả</button>
+            <button class="chip-btn" data-chip="Ngôn tình" type="button">Ngôn tình</button>
+            <button class="chip-btn" data-chip="Hiện đại" type="button">Hiện đại</button>
+            <button class="chip-btn" data-chip="Cổ đại" type="button">Cổ đại</button>
+            <button class="chip-btn" data-chip="Xuyên không" type="button">Xuyên không</button>
+            <button class="chip-btn" data-chip="Sủng" type="button">Sủng</button>
+            <button class="chip-btn" data-chip="Chữa lành" type="button">Chữa lành</button>
+          </div>
+        </div>
+
+        <div class="panel books-panel" id="booksSection">
+          <div class="section-title section-title-main" id="booksPanelTitle">Kho truyện nổi bật</div>
+          <div class="books-grid" id="booksGrid"></div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </section>
+    </section>
+
+    <section id="readerView" class="reader-shell hidden">
+      <article class="reader-panel">
+        <div class="reader-top">
+          <div>
+            <h1 class="reader-title" id="readerTitle">Tên truyện</h1>
+            <div class="reader-sub" id="readerMeta">Tác giả • Chương 1</div>
+          </div>
+          <button class="ghost-btn" id="backBtn" type="button">← Quay lại danh sách</button>
+        </div>
+
+        <div class="reader-book-header">
+          <img id="readerCover" class="reader-cover" src="" alt="Bìa truyện" />
+          <div class="reader-book-info">
+            <div class="reader-book-author" id="readerAuthor"></div>
+            <div class="reader-book-tags" id="readerTags"></div>
+            <div class="reader-book-desc" id="readerDesc"></div>
+          </div>
+        </div>
+
+        <div class="reader-controls">
+          <label>
+            Cỡ chữ
+            <input id="fontSizeRange" type="range" min="16" max="28" value="20" />
+          </label>
+
+          <label>
+            Độ rộng dòng
+            <input id="readerWidthRange" type="range" min="680" max="980" value="860" />
+          </label>
+
+          <label>
+            Màu nền
+            <select id="themeSelect">
+              <option value="paper">Sáng</option>
+              <option value="sepia">Sepia</option>
+              <option value="dark">Tối</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="chapter-list-wrap">
+          <div class="chapter-list-head">
+            <div class="chapter-list-title">Danh sách chương</div>
+            <div class="chapter-list-tools">
+              <select id="chapterSelect" class="chapter-select"></select>
+            </div>
+          </div>
+          <div id="chapterList" class="chapter-list"></div>
+        </div>
+
+        <div class="reader-body" id="readerBody"></div>
+
+        <div class="reader-footer">
+          <button class="ghost-btn" id="prevChapterBtn" type="button">← Chương trước</button>
+          <button class="solid-btn" id="nextChapterBtn" type="button">Chương tiếp →</button>
+        </div>
+      </article>
+
+      <aside class="floating-tools">
+        <button id="saveShelfBtn" type="button">♡ Lưu truyện này</button>
+        <button id="scrollTopBtn" type="button">↑ Lên đầu trang</button>
+        <div class="muted-note">
+          Bạn có thể đọc truyện, đổi cỡ chữ, đổi nền và chuyển chương trực tiếp tại đây.
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
