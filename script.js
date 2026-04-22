@@ -55,6 +55,14 @@ let shelfLink;
 let booksPanelTitle;
 let rankingLink;
 let categoryLink;
+let mobileSearchToggle;
+let mobileMenuToggle;
+let searchWrap;
+let mainNav;
+let mobileRankingToggle;
+let mobileCategoryToggle;
+let mobileRankingMenu;
+let mobileCategoryMenu;
 
 function $(id) {
   return document.getElementById(id);
@@ -88,22 +96,177 @@ function isReaderOpen() {
   return !!(readerView && readerView.classList.contains("active"));
 }
 
+function isHomeOpen() {
+  return !!(homeView && !homeView.classList.contains("hidden"));
+}
+
+function shouldUseMobileTopbarEffect() {
+  return isMobileView() && (isReaderOpen() || isHomeOpen());
+}
+
+function closeMobilePanels() {
+  document.body.classList.remove(
+    "mobile-search-open",
+    "mobile-menu-open",
+    "mobile-ranking-open",
+    "mobile-category-open"
+  );
+}
+
+function closeMobileSubmenus() {
+  document.body.classList.remove("mobile-ranking-open", "mobile-category-open");
+}
+
 function resetTopbarState() {
   document.body.classList.remove("reader-mobile", "topbar-hidden", "topbar-compact");
+}
+
+function getSearchSvg() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"></circle>
+      <line x1="20" y1="20" x2="16.65" y2="16.65"></line>
+    </svg>
+  `;
+}
+
+function getMenuSvg() {
+  return `
+    <svg viewBox="0 0 24 24" aria-hidden="true" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="4" y1="7" x2="20" y2="7"></line>
+      <line x1="4" y1="12" x2="20" y2="12"></line>
+      <line x1="4" y1="17" x2="20" y2="17"></line>
+    </svg>
+  `;
+}
+
+function applyMobileButtonIcons() {
+  if (mobileSearchToggle) {
+    mobileSearchToggle.innerHTML = getSearchSvg();
+  }
+
+  if (mobileMenuToggle) {
+    mobileMenuToggle.innerHTML = getMenuSvg();
+  }
+}
+
+function updateMobileToggleState() {
+  if (mobileSearchToggle) {
+    const searchOpen = document.body.classList.contains("mobile-search-open");
+    mobileSearchToggle.setAttribute("aria-expanded", String(searchOpen));
+    mobileSearchToggle.setAttribute(
+      "aria-label",
+      searchOpen ? "Đóng tìm kiếm" : "Mở tìm kiếm"
+    );
+    mobileSearchToggle.classList.toggle("active", searchOpen);
+  }
+
+  if (mobileMenuToggle) {
+    const menuOpen = document.body.classList.contains("mobile-menu-open");
+    mobileMenuToggle.setAttribute("aria-expanded", String(menuOpen));
+    mobileMenuToggle.setAttribute(
+      "aria-label",
+      menuOpen ? "Đóng menu" : "Mở menu"
+    );
+    mobileMenuToggle.classList.toggle("active", menuOpen);
+  }
+}
+
+function toggleMobileSearch(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  const willOpen = !document.body.classList.contains("mobile-search-open");
+
+  document.body.classList.remove("mobile-menu-open");
+  closeMobileSubmenus();
+  document.body.classList.toggle("mobile-search-open", willOpen);
+  document.body.classList.remove("topbar-hidden");
+  document.body.classList.remove("topbar-compact");
+
+  updateMobileToggleState();
+
+  if (willOpen && searchInput) {
+    setTimeout(() => searchInput.focus(), 80);
+  }
+}
+
+function toggleMobileMenu(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  const willOpen = !document.body.classList.contains("mobile-menu-open");
+
+  document.body.classList.remove("mobile-search-open");
+
+  if (!willOpen) {
+    closeMobileSubmenus();
+  }
+
+  document.body.classList.toggle("mobile-menu-open", willOpen);
+  document.body.classList.remove("topbar-hidden");
+  document.body.classList.remove("topbar-compact");
+
+  updateMobileToggleState();
+}
+
+function toggleMobileRanking(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  const willOpen = !document.body.classList.contains("mobile-ranking-open");
+  document.body.classList.remove("mobile-category-open");
+  document.body.classList.toggle("mobile-ranking-open", willOpen);
+}
+
+function toggleMobileCategory(e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  const willOpen = !document.body.classList.contains("mobile-category-open");
+  document.body.classList.remove("mobile-ranking-open");
+  document.body.classList.toggle("mobile-category-open", willOpen);
 }
 
 function updateMobileTopbarOnScroll() {
   mobileTopbarTicking = false;
 
-  if (!isMobileView() || !isReaderOpen()) {
+  if (!shouldUseMobileTopbarEffect()) {
     resetTopbarState();
+    closeMobilePanels();
+    updateMobileToggleState();
     return;
   }
 
   document.body.classList.add("reader-mobile");
 
+  const panelOpen =
+    document.body.classList.contains("mobile-search-open") ||
+    document.body.classList.contains("mobile-menu-open");
+
   const currentScrollY = window.scrollY || window.pageYOffset || 0;
   const delta = currentScrollY - lastScrollY;
+
+  if (panelOpen) {
+    document.body.classList.remove("topbar-hidden");
+
+    if (currentScrollY <= 80) {
+      document.body.classList.remove("topbar-compact");
+    } else {
+      document.body.classList.add("topbar-compact");
+    }
+
+    lastScrollY = currentScrollY;
+    return;
+  }
 
   if (currentScrollY <= 10) {
     document.body.classList.remove("topbar-hidden", "topbar-compact");
@@ -111,12 +274,15 @@ function updateMobileTopbarOnScroll() {
     document.body.classList.add("topbar-compact");
     document.body.classList.remove("topbar-hidden");
   } else if (delta > 6) {
+    document.body.classList.add("topbar-hidden");
     document.body.classList.add("topbar-compact");
-    document.body.classList.remove("topbar-hidden");
   } else if (delta < -6) {
     document.body.classList.remove("topbar-hidden");
+
     if (currentScrollY <= 80) {
       document.body.classList.remove("topbar-compact");
+    } else {
+      document.body.classList.add("topbar-compact");
     }
   }
 
@@ -588,7 +754,9 @@ function openChapter(chapterIndex) {
   }
 
   saveReadingProgress();
+  lastScrollY = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
+  handleMobileTopbarScroll();
 }
 
 async function openReader(bookId, chapterIndex = null) {
@@ -644,11 +812,11 @@ async function openReader(bookId, chapterIndex = null) {
       readerView.classList.add("active");
     }
 
-    lastScrollY = window.scrollY || 0;
-    if (isMobileView()) {
-      document.body.classList.add("reader-mobile");
-      document.body.classList.remove("topbar-hidden", "topbar-compact");
-    }
+    closeMobilePanels();
+    updateMobileToggleState();
+
+    lastScrollY = 0;
+    handleMobileTopbarScroll();
 
     const chapters = Array.isArray(fullBook.chapters) ? fullBook.chapters : [];
     if (chapters.length === 0) {
@@ -680,8 +848,12 @@ function backHome() {
     homeView.classList.remove("hidden");
   }
 
+  closeMobilePanels();
+  updateMobileToggleState();
   resetTopbarState();
   window.scrollTo({ top: 0, behavior: "smooth" });
+  lastScrollY = 0;
+  handleMobileTopbarScroll();
 }
 
 function resetToHomeMode() {
@@ -700,6 +872,8 @@ function resetToHomeMode() {
 
 function goHome(e) {
   if (e) e.preventDefault();
+  closeMobilePanels();
+  updateMobileToggleState();
   resetToHomeMode();
   backHome();
   renderBooks();
@@ -707,6 +881,8 @@ function goHome(e) {
 
 function openCategorySection(e) {
   if (e) e.preventDefault();
+  closeMobilePanels();
+  updateMobileToggleState();
 
   if (readerView?.classList.contains("active")) {
     backHome();
@@ -720,6 +896,8 @@ function openCategorySection(e) {
 
 function openRankingSection(e) {
   if (e) e.preventDefault();
+  closeMobilePanels();
+  updateMobileToggleState();
 
   if (readerView?.classList.contains("active")) {
     backHome();
@@ -733,6 +911,8 @@ function openRankingSection(e) {
 
 function openShelfView(e) {
   if (e) e.preventDefault();
+  closeMobilePanels();
+  updateMobileToggleState();
 
   showShelfOnly = true;
   currentPage = 1;
@@ -812,6 +992,50 @@ function bindEvents() {
   if (rankingLink) rankingLink.addEventListener("click", openRankingSection);
   if (categoryLink) categoryLink.addEventListener("click", openCategorySection);
 
+  if (mobileSearchToggle) {
+    mobileSearchToggle.addEventListener("click", toggleMobileSearch);
+  }
+
+  if (mobileMenuToggle) {
+    mobileMenuToggle.addEventListener("click", toggleMobileMenu);
+  }
+
+  if (mobileRankingToggle) {
+    mobileRankingToggle.addEventListener("click", toggleMobileRanking);
+  }
+
+  if (mobileCategoryToggle) {
+    mobileCategoryToggle.addEventListener("click", toggleMobileCategory);
+  }
+
+  if (mainNav) {
+    mainNav.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const mobileChip = target.getAttribute("data-mobile-chip");
+      const rankingBook = target.getAttribute("data-ranking-book");
+
+      if (mobileChip) {
+        e.preventDefault();
+        setActiveChip(mobileChip);
+        closeMobilePanels();
+        updateMobileToggleState();
+
+        const booksSection = $("booksSection");
+        if (booksSection) {
+          booksSection.scrollIntoView({ behavior: "smooth" });
+        }
+        return;
+      }
+
+      if (rankingBook) {
+        e.preventDefault();
+        openReader(rankingBook, 0);
+      }
+    });
+  }
+
   if (booksGrid) {
     booksGrid.addEventListener("click", (e) => {
       const target = e.target;
@@ -864,6 +1088,10 @@ function bindEvents() {
     searchBtn.addEventListener("click", () => {
       currentPage = 1;
       renderBooks();
+      if (isMobileView()) {
+        closeMobilePanels();
+        updateMobileToggleState();
+      }
     });
   }
 
@@ -872,6 +1100,10 @@ function bindEvents() {
       if (e.key === "Enter") {
         currentPage = 1;
         renderBooks();
+        if (isMobileView()) {
+          closeMobilePanels();
+          updateMobileToggleState();
+        }
       }
     });
   }
@@ -907,6 +1139,8 @@ function bindEvents() {
       e.preventDefault();
       const chip = link.dataset.chip || "all";
       setActiveChip(chip);
+      closeMobilePanels();
+      updateMobileToggleState();
     });
   });
 
@@ -1005,16 +1239,28 @@ function bindEvents() {
     });
   }
 
+  document.addEventListener("click", (e) => {
+    if (!isMobileView()) return;
+
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+
+    const insideTopbar = target.closest(".topbar");
+    if (!insideTopbar) {
+      closeMobilePanels();
+      updateMobileToggleState();
+    }
+  });
+
   window.addEventListener("scroll", handleMobileTopbarScroll, { passive: true });
 
   window.addEventListener("resize", () => {
     if (!isMobileView()) {
-      resetTopbarState();
-    } else if (isReaderOpen()) {
-      document.body.classList.add("reader-mobile");
-      document.body.classList.remove("topbar-hidden", "topbar-compact");
-      lastScrollY = window.scrollY || 0;
+      closeMobilePanels();
+      updateMobileToggleState();
     }
+    lastScrollY = window.scrollY || 0;
+    handleMobileTopbarScroll();
   });
 }
 
@@ -1051,6 +1297,14 @@ function initDomRefs() {
   homeLink = $("homeLink");
   rankingLink = $("rankingLink");
   categoryLink = $("categoryLink");
+  mobileSearchToggle = $("mobileSearchToggle");
+  mobileMenuToggle = $("mobileMenuToggle");
+  searchWrap = $("searchWrap");
+  mainNav = $("mainNav");
+  mobileRankingToggle = $("mobileRankingToggle");
+  mobileCategoryToggle = $("mobileCategoryToggle");
+  mobileRankingMenu = $("mobileRankingMenu");
+  mobileCategoryMenu = $("mobileCategoryMenu");
 
   shelfLink = $("shelfLink") || document.querySelector('.nav a:nth-child(4)');
   booksPanelTitle = $("booksPanelTitle");
@@ -1068,8 +1322,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   initDomRefs();
+  applyMobileButtonIcons();
+  updateMobileToggleState();
   bindEvents();
   applySavedReaderSettings();
   updateBooksPanelTitle();
   loadBooks();
+
+  lastScrollY = window.scrollY || 0;
+  handleMobileTopbarScroll();
 });
