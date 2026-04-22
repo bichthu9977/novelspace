@@ -6,6 +6,9 @@ let currentChapterIndex = 0;
 let currentPage = 1;
 let showShelfOnly = false;
 
+let lastScrollY = 0;
+let mobileTopbarTicking = false;
+
 const booksPerPage = 6;
 
 const STORAGE_KEYS = {
@@ -50,6 +53,8 @@ let homeBtn;
 let homeLink;
 let shelfLink;
 let booksPanelTitle;
+let rankingLink;
+let categoryLink;
 
 function $(id) {
   return document.getElementById(id);
@@ -72,6 +77,56 @@ function safeParseJSON(value, fallback) {
     return parsed ?? fallback;
   } catch {
     return fallback;
+  }
+}
+
+function isMobileView() {
+  return window.innerWidth <= 640;
+}
+
+function isReaderOpen() {
+  return !!(readerView && readerView.classList.contains("active"));
+}
+
+function resetTopbarState() {
+  document.body.classList.remove("reader-mobile", "topbar-hidden", "topbar-compact");
+}
+
+function updateMobileTopbarOnScroll() {
+  mobileTopbarTicking = false;
+
+  if (!isMobileView() || !isReaderOpen()) {
+    resetTopbarState();
+    return;
+  }
+
+  document.body.classList.add("reader-mobile");
+
+  const currentScrollY = window.scrollY || window.pageYOffset || 0;
+  const delta = currentScrollY - lastScrollY;
+
+  if (currentScrollY <= 10) {
+    document.body.classList.remove("topbar-hidden", "topbar-compact");
+  } else if (currentScrollY <= 80) {
+    document.body.classList.add("topbar-compact");
+    document.body.classList.remove("topbar-hidden");
+  } else if (delta > 6) {
+    document.body.classList.add("topbar-compact");
+    document.body.classList.remove("topbar-hidden");
+  } else if (delta < -6) {
+    document.body.classList.remove("topbar-hidden");
+    if (currentScrollY <= 80) {
+      document.body.classList.remove("topbar-compact");
+    }
+  }
+
+  lastScrollY = currentScrollY;
+}
+
+function handleMobileTopbarScroll() {
+  if (!mobileTopbarTicking) {
+    window.requestAnimationFrame(updateMobileTopbarOnScroll);
+    mobileTopbarTicking = true;
   }
 }
 
@@ -198,6 +253,7 @@ function updateSaveShelfButton(bookId) {
 
   const saved = isBookSaved(bookId);
   saveShelfBtn.textContent = saved ? "♥ Đã lưu vào tủ sách" : "♡ Lưu truyện này";
+  saveShelfBtn.classList.toggle("saved", saved);
 }
 
 function updateBooksPanelTitle() {
@@ -428,6 +484,7 @@ function renderChapterChips() {
 
   const chapter = chapters[currentChapterIndex];
   if (!chapter) return;
+
   const chip = document.createElement("span");
   chip.className = "chapter-chip active";
   chip.textContent = chapter.title || `Chương ${currentChapterIndex + 1}`;
@@ -502,7 +559,7 @@ function openChapter(chapterIndex) {
     renderChapterSelect();
 
     if (prevChapterBtn) prevChapterBtn.disabled = currentChapterIndex === 0;
-    if (nextChapterBtn) prevChapterBtn.disabled = currentChapterIndex >= chapters.length - 1;
+    if (nextChapterBtn) nextChapterBtn.disabled = currentChapterIndex >= chapters.length - 1;
     return;
   }
 
@@ -587,6 +644,12 @@ async function openReader(bookId, chapterIndex = null) {
       readerView.classList.add("active");
     }
 
+    lastScrollY = window.scrollY || 0;
+    if (isMobileView()) {
+      document.body.classList.add("reader-mobile");
+      document.body.classList.remove("topbar-hidden", "topbar-compact");
+    }
+
     const chapters = Array.isArray(fullBook.chapters) ? fullBook.chapters : [];
     if (chapters.length === 0) {
       currentChapterIndex = 0;
@@ -617,6 +680,7 @@ function backHome() {
     homeView.classList.remove("hidden");
   }
 
+  resetTopbarState();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -639,6 +703,32 @@ function goHome(e) {
   resetToHomeMode();
   backHome();
   renderBooks();
+}
+
+function openCategorySection(e) {
+  if (e) e.preventDefault();
+
+  if (readerView?.classList.contains("active")) {
+    backHome();
+  }
+
+  const categorySection = $("categorySection");
+  if (categorySection) {
+    categorySection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function openRankingSection(e) {
+  if (e) e.preventDefault();
+
+  if (readerView?.classList.contains("active")) {
+    backHome();
+  }
+
+  const rankingSection = $("rankingSection");
+  if (rankingSection) {
+    rankingSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function openShelfView(e) {
@@ -719,6 +809,8 @@ function bindEvents() {
   if (homeBtn) homeBtn.addEventListener("click", goHome);
   if (homeLink) homeLink.addEventListener("click", goHome);
   if (shelfLink) shelfLink.addEventListener("click", openShelfView);
+  if (rankingLink) rankingLink.addEventListener("click", openRankingSection);
+  if (categoryLink) categoryLink.addEventListener("click", openCategorySection);
 
   if (booksGrid) {
     booksGrid.addEventListener("click", (e) => {
@@ -912,6 +1004,18 @@ function bindEvents() {
       openReader(1, 0);
     });
   }
+
+  window.addEventListener("scroll", handleMobileTopbarScroll, { passive: true });
+
+  window.addEventListener("resize", () => {
+    if (!isMobileView()) {
+      resetTopbarState();
+    } else if (isReaderOpen()) {
+      document.body.classList.add("reader-mobile");
+      document.body.classList.remove("topbar-hidden", "topbar-compact");
+      lastScrollY = window.scrollY || 0;
+    }
+  });
 }
 
 function initDomRefs() {
@@ -945,8 +1049,9 @@ function initDomRefs() {
   openFeaturedBtn = $("openFeaturedBtn");
   homeBtn = $("homeBtn");
   homeLink = $("homeLink");
+  rankingLink = $("rankingLink");
+  categoryLink = $("categoryLink");
 
-  // index cũ không có 2 id này, nên fallback bằng querySelector
   shelfLink = $("shelfLink") || document.querySelector('.nav a:nth-child(4)');
   booksPanelTitle = $("booksPanelTitle");
 }
