@@ -3,32 +3,80 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NovelSpace - Demo UI</title>
+  <title>Truyện Full VN</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand" id="homeBtn">NovelSpace</div>
+      <div class="brand" id="homeBtn">TruyệnFullVn</div>
 
-      <div class="search-wrap">
+      <div class="topbar-actions-mobile">
+        <button
+          id="mobileSearchToggle"
+          class="icon-btn mobile-only"
+          type="button"
+          aria-label="Mở tìm kiếm"
+          aria-expanded="false"
+        ></button>
+
+        <button
+          id="mobileMenuToggle"
+          class="icon-btn mobile-only"
+          type="button"
+          aria-label="Mở menu"
+          aria-expanded="false"
+        ></button>
+      </div>
+
+      <div class="search-wrap" id="searchWrap">
         <input id="searchInput" type="text" placeholder="Tìm truyện, tác giả, tag..." />
         <button id="searchBtn" type="button">Tìm</button>
       </div>
 
-      <nav class="nav">
+      <nav class="nav" id="mainNav">
         <a href="#" id="homeLink">Trang chủ</a>
-        <a href="#" id="rankingLink">BXH</a>
-        <a href="#" id="categoryLink">Thể loại</a>
+
+        <div class="mobile-nav-group">
+          <button class="mobile-nav-parent" id="mobileRankingToggle" type="button">
+            <span>BXH</span>
+            <span class="mobile-nav-arrow">⌄</span>
+          </button>
+          <div class="mobile-submenu" id="mobileRankingMenu">
+            <button class="mobile-subitem" type="button" data-ranking-book="5">Hầu Gia Đừng Quá Dịu Dàng</button>
+            <button class="mobile-subitem" type="button" data-ranking-book="1">Sau Khi Xuyên Sách Ta Thành Nữ Phụ</button>
+            <button class="mobile-subitem" type="button" data-ranking-book="4">Trọng Sinh Thành Tiểu Tổ Tông</button>
+            <button class="mobile-subitem" type="button" data-ranking-book="3">Vương Gia Hôm Nay Cũng Ghen</button>
+            <button class="mobile-subitem" type="button" data-ranking-book="2">Gặp Em Giữa Mùa Hoa Rụng</button>
+          </div>
+        </div>
+
+        <div class="mobile-nav-group">
+          <button class="mobile-nav-parent" id="mobileCategoryToggle" type="button">
+            <span>Thể loại</span>
+            <span class="mobile-nav-arrow">⌄</span>
+          </button>
+          <div class="mobile-submenu" id="mobileCategoryMenu">
+            <button class="mobile-subitem" type="button" data-mobile-chip="all">Tất cả</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Ngôn tình">Ngôn tình</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Xuyên không">Xuyên không</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Cổ đại">Cổ đại</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Hiện đại">Hiện đại</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Sủng">Sủng</button>
+            <button class="mobile-subitem" type="button" data-mobile-chip="Chữa lành">Chữa lành</button>
+          </div>
+        </div>
+
         <a href="#" id="shelfLink">Tủ sách</a>
       </nav>
     </div>
   </header>
+
   <main>
     <section id="homeView" class="layout">
       <aside class="sidebar">
-        <div class="sidebar-block">
-          <div class="section-title">Danh mục nhanh</div>
+        <div class="sidebar-block" id="categorySection">
+          <div class="section-title">Thể loại</div>
           <ul class="menu-list">
             <li><a href="#" data-chip="all">Tất cả</a></li>
             <li><a href="#" data-chip="Ngôn tình">Ngôn tình</a></li>
@@ -40,7 +88,7 @@
           </ul>
         </div>
 
-        <div class="sidebar-block">
+        <div class="sidebar-block" id="rankingSection">
           <div class="section-title">Bảng xếp hạng</div>
           <ol class="ranking-list" id="rankingList">
             <li data-book-id="5">Hầu Gia Đừng Quá Dịu Dàng</li>
@@ -57,7 +105,7 @@
           <div class="hero-copy">
             <h1>Kho truyện online theo phong cách cổ điển</h1>
             <p>
-              Bản này dùng ảnh local trong thư mục project, có phân trang danh sách truyện, reader nhiều chương và lưu truyện vào tủ sách bằng localStorage.
+              Mở truyện. Đọc. Và quên mất thời gian.
             </p>
             <div class="hero-actions">
               <button class="solid-btn" id="scrollBooksBtn" type="button">Xem truyện nổi bật</button>
@@ -65,18 +113,19 @@
             </div>
           </div>
 
-          <div class="hero-card">
+          <div class="hero-card" id="featuredCard" role="button" tabindex="0" aria-label="Mở truyện đề cử">
             <span class="hero-badge">Truyện đề cử hôm nay</span>
             <div class="hero-book">
               <img
                 class="cover cover-hero"
-                src="images/book1.jpg"
+                id="featuredCover"
+                src="images/default.jpg"
                 alt="Bìa truyện đề cử"
                 onerror="this.src='images/default.jpg'"
               />
               <div>
-                <h3>Sau Khi Xuyên Sách Ta Thành Nữ Phụ</h3>
-                <p>Một câu chuyện nhẹ nhàng, hài hước, có sủng và drama vừa đủ.</p>
+                <h3 id="featuredTitle">Đang tải truyện đề cử...</h3>
+                <p id="featuredDesc">Một câu chuyện ngẫu nhiên đang chờ bạn khám phá.</p>
               </div>
             </div>
           </div>
