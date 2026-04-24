@@ -883,6 +883,7 @@ function openChapter(chapterIndex) {
   }
 
   saveReadingProgress();
+  updateRouteForCurrentChapter();
   lastScrollY = 0;
   window.scrollTo({ top: 0, behavior: "smooth" });
   handleMobileTopbarScroll();
@@ -968,6 +969,7 @@ async function openReader(bookId, chapterIndex = null) {
 }
 
 function backHome() {
+  clearBookRoute();
   if (readerView) {
     readerView.classList.remove("active");
     readerView.classList.add("hidden");
@@ -1067,6 +1069,91 @@ function setActiveChip(chip) {
 }
 
 
+
+function goToBook(bookId, chapterIndex = 0) {
+  const id = Number(bookId);
+  const chapter = Number(chapterIndex);
+
+  if (!Number.isFinite(id) || id <= 0) return;
+
+  const safeChapter = Number.isFinite(chapter) && chapter >= 0 ? chapter : 0;
+  const nextHash = `#book-${id}-${safeChapter + 1}`;
+
+  if (window.location.hash === nextHash) {
+    handleRoute();
+  } else {
+    window.location.hash = nextHash;
+  }
+}
+
+
+function showHomeWithoutRouteChange() {
+  if (readerView) {
+    readerView.classList.remove("active");
+    readerView.classList.add("hidden");
+  }
+
+  if (homeView) {
+    homeView.classList.remove("hidden");
+  }
+
+  closeMobilePanels();
+  updateMobileToggleState();
+  resetTopbarState();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  lastScrollY = 0;
+  handleMobileTopbarScroll();
+}
+
+
+function clearBookRoute() {
+  if (window.location.hash.startsWith("#book-")) {
+    history.pushState("", document.title, window.location.pathname + window.location.search);
+  }
+}
+
+function parseBookRoute() {
+  const hash = window.location.hash.replace("#", "").trim();
+
+  if (!hash.startsWith("book-")) return null;
+
+  const parts = hash.split("-");
+  const bookId = Number(parts[1]);
+  const chapterNumber = Number(parts[2] || 1);
+
+  if (!Number.isFinite(bookId) || bookId <= 0) return null;
+
+  return {
+    bookId,
+    chapterIndex: Math.max(0, (Number.isFinite(chapterNumber) ? chapterNumber : 1) - 1)
+  };
+}
+
+function handleRoute() {
+  const route = parseBookRoute();
+
+  if (!route) {
+    if (readerView && readerView.classList.contains("active")) {
+      showHomeWithoutRouteChange();
+    }
+    return;
+  }
+
+  if (!Array.isArray(books) || books.length === 0) return;
+
+  openReader(route.bookId, route.chapterIndex);
+}
+
+function updateRouteForCurrentChapter() {
+  if (!currentBook) return;
+
+  const nextHash = `#book-${currentBook.id}-${currentChapterIndex + 1}`;
+  if (window.location.hash !== nextHash) {
+    history.replaceState("", document.title, nextHash);
+  }
+}
+
+
 function pickRandomFeaturedBook() {
   if (!Array.isArray(books) || books.length === 0) return null;
 
@@ -1112,7 +1199,7 @@ function openFeaturedBook() {
   }
 
   if (featuredBookId) {
-    openReader(featuredBookId, 0);
+    goToBook(featuredBookId, 0);
   }
 }
 
@@ -1184,6 +1271,7 @@ async function loadBooks() {
     renderFeaturedBook();
     renderRandomRankings();
     renderBooks();
+    handleRoute();
   } catch (error) {
     console.error("Không tải được books-index.json:", error);
 
@@ -1197,7 +1285,7 @@ async function loadBooks() {
       if (!item) return;
 
       e.preventDefault();
-      openReader(item.dataset.bookId, 0);
+      goToBook(item.dataset.bookId, 0);
     });
   }
 
@@ -1223,6 +1311,20 @@ function bindEvents() {
       toggleCategoryList(toggleBtn);
     }
   });
+
+
+  if (rankingList) {
+    rankingList.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const item = target.closest("[data-book-id]");
+      if (!item) return;
+
+      e.preventDefault();
+      goToBook(item.dataset.bookId, 0);
+    });
+  }
 
   if (homeBtn) homeBtn.addEventListener("click", goHome);
   if (homeLink) homeLink.addEventListener("click", goHome);
@@ -1269,7 +1371,7 @@ function bindEvents() {
 
       if (rankingBook) {
         e.preventDefault();
-        openReader(rankingBook, 0);
+        goToBook(rankingBook, 0);
       }
     });
   }
@@ -1284,12 +1386,12 @@ function bindEvents() {
       const saveId = target.getAttribute("data-save");
 
       if (readId) {
-        openReader(readId, 0);
+        goToBook(readId, 0);
         return;
       }
 
       if (continueId) {
-        openReader(continueId, null);
+        goToBook(continueId, getReadingProgress(continueId));
         return;
       }
 
@@ -1317,7 +1419,7 @@ function bindEvents() {
 
       const card = target.closest(".book-card");
       if (card?.dataset.id) {
-        openReader(card.dataset.id, null);
+        goToBook(card.dataset.id, getReadingProgress(card.dataset.id));
       }
     });
   }
@@ -1506,6 +1608,8 @@ function bindEvents() {
   });
 
   window.addEventListener("scroll", handleMobileTopbarScroll, { passive: true });
+
+  window.addEventListener("hashchange", handleRoute);
 
   window.addEventListener("resize", () => {
     if (!isMobileView()) {
