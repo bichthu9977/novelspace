@@ -49,6 +49,11 @@ let saveShelfBtn;
 let scrollTopBtn;
 let scrollBooksBtn;
 let openFeaturedBtn;
+let featuredCard;
+let featuredCover;
+let featuredTitle;
+let featuredDesc;
+let featuredBookId = null;
 let homeBtn;
 let homeLink;
 let shelfLink;
@@ -63,6 +68,7 @@ let mobileRankingToggle;
 let mobileCategoryToggle;
 let mobileRankingMenu;
 let mobileCategoryMenu;
+let rankingList;
 
 function $(id) {
   return document.getElementById(id);
@@ -468,6 +474,120 @@ function applySavedReaderSettings() {
   applyTheme(savedTheme);
 }
 
+function getAllCategoryTags() {
+  const map = new Map();
+
+  books.forEach((book) => {
+    if (!Array.isArray(book.tags)) return;
+
+    book.tags.forEach((rawTag) => {
+      const tag = String(rawTag ?? "").trim();
+      if (!tag) return;
+
+      const key = tag.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, tag);
+      }
+    });
+  });
+
+  return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "vi"));
+}
+
+function renderCategoryControls() {
+  const tags = getAllCategoryTags();
+  const firstTags = tags.slice(0, 4);
+  const restTags = tags.slice(4);
+  const hasMore = restTags.length > 0;
+
+  const makeChipButton = (tag, extra = false) => `
+    <button
+      class="chip-btn ${activeChip === tag ? "active" : ""} ${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}
+      data-chip="${escapeHtml(tag)}"
+      type="button"
+    >${tag === "all" ? "Tất cả" : escapeHtml(tag)}</button>
+  `;
+
+  const makeMobileButton = (tag, extra = false) => `
+    <button
+      class="mobile-subitem ${activeChip === tag ? "active" : ""} ${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}
+      type="button"
+      data-mobile-chip="${escapeHtml(tag)}"
+    >${tag === "all" ? "Tất cả" : escapeHtml(tag)}</button>
+  `;
+
+  const makeSidebarItem = (tag, extra = false) => `
+    <li class="${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}>
+      <a href="#" class="${activeChip === tag ? "active" : ""}" data-chip="${escapeHtml(tag)}">${tag === "all" ? "Tất cả" : escapeHtml(tag)}</a>
+    </li>
+  `;
+
+  if (chipGroup) {
+    chipGroup.innerHTML = `
+      ${makeChipButton("all")}
+      ${firstTags.map((tag) => makeChipButton(tag)).join("")}
+      ${restTags.map((tag) => makeChipButton(tag, true)).join("")}
+      ${hasMore ? '<button class="chip-btn category-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button>' : ""}
+    `;
+  }
+
+  const menuList = document.querySelector(".menu-list");
+  if (menuList) {
+    menuList.innerHTML = `
+      ${makeSidebarItem("all")}
+      ${firstTags.map((tag) => makeSidebarItem(tag)).join("")}
+      ${restTags.map((tag) => makeSidebarItem(tag, true)).join("")}
+      ${hasMore ? '<li><button class="category-sidebar-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button></li>' : ""}
+    `;
+  }
+
+  if (mobileCategoryMenu) {
+    mobileCategoryMenu.innerHTML = `
+      ${makeMobileButton("all")}
+      ${firstTags.map((tag) => makeMobileButton(tag)).join("")}
+      ${restTags.map((tag) => makeMobileButton(tag, true)).join("")}
+      ${hasMore ? '<button class="mobile-subitem category-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button>' : ""}
+    `;
+  }
+}
+
+
+function collapseCategoryExtrasByDefault() {
+  document.querySelectorAll(".chip-group, .menu-list, .mobile-submenu").forEach((container) => {
+    container.classList.remove("category-expanded");
+    container.querySelectorAll(".category-extra").forEach((item) => {
+      item.hidden = true;
+    });
+    const toggle = container.querySelector("[data-category-toggle]");
+    if (toggle) {
+      toggle.textContent = "Thêm thể loại ▾";
+    }
+  });
+}
+
+function toggleCategoryList(toggleButton) {
+  const container = toggleButton.closest(".chip-group, .menu-list, .mobile-submenu");
+  if (!container) return;
+
+  const isOpen = container.classList.toggle("category-expanded");
+
+  container.querySelectorAll(".category-extra").forEach((item) => {
+    item.hidden = !isOpen;
+  });
+
+  toggleButton.textContent = isOpen ? "Thu gọn ▴" : "Thêm thể loại ▾";
+}
+
+function updateCategoryActiveState() {
+  document.querySelectorAll("[data-chip]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.chip === activeChip);
+  });
+
+  document.querySelectorAll("[data-mobile-chip]").forEach((el) => {
+    el.classList.toggle("active", el.dataset.mobileChip === activeChip);
+  });
+}
+
 function getFilteredBooks() {
   let filtered = [...books];
 
@@ -523,47 +643,56 @@ function renderPagination(totalItems) {
   if (!pagination) return;
 
   const totalPages = Math.ceil(totalItems / booksPerPage) || 1;
-  if (currentPage > totalPages) currentPage = 1;
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
 
   pagination.innerHTML = "";
 
-  const prev = document.createElement("button");
-  prev.className = "page-btn";
-  prev.type = "button";
-  prev.textContent = "←";
-  prev.disabled = currentPage === 1;
-  prev.addEventListener("click", () => {
-    if (currentPage > 1) {
-      currentPage -= 1;
-      renderBooks();
-    }
-  });
-  pagination.appendChild(prev);
-
-  for (let i = 1; i <= totalPages; i += 1) {
+  function addBtn(text, page, disabled = false, active = false) {
     const btn = document.createElement("button");
-    btn.className = `page-btn ${i === currentPage ? "active" : ""}`;
+    btn.className = `page-btn ${active ? "active" : ""}`;
     btn.type = "button";
-    btn.textContent = String(i);
+    btn.textContent = text;
+    btn.disabled = disabled;
+
     btn.addEventListener("click", () => {
-      currentPage = i;
+      if (disabled) return;
+      currentPage = page;
       renderBooks();
+
+      const booksSection = document.getElementById("booksSection");
+      if (booksSection) {
+        booksSection.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     });
+
     pagination.appendChild(btn);
   }
 
-  const next = document.createElement("button");
-  next.className = "page-btn";
-  next.type = "button";
-  next.textContent = "→";
-  next.disabled = currentPage === totalPages;
-  next.addEventListener("click", () => {
-    if (currentPage < totalPages) {
-      currentPage += 1;
-      renderBooks();
-    }
-  });
-  pagination.appendChild(next);
+  // << về trang đầu
+  addBtn("<<", 1, currentPage === 1);
+
+  // < trang trước
+  addBtn("<", currentPage - 1, currentPage === 1);
+
+  // chỉ hiện tối đa 4 trang gần currentPage
+  let startPage = Math.max(1, currentPage - 1);
+  let endPage = startPage + 3;
+
+  if (endPage > totalPages) {
+    endPage = totalPages;
+    startPage = Math.max(1, endPage - 3);
+  }
+
+  for (let i = startPage; i <= endPage; i += 1) {
+    addBtn(String(i), i, false, i === currentPage);
+  }
+
+  // > trang sau
+  addBtn(">", currentPage + 1, currentPage === totalPages);
+
+  // >> tới trang cuối
+  addBtn(">>", totalPages, currentPage === totalPages);
 }
 
 function renderBooks() {
@@ -865,9 +994,7 @@ function resetToHomeMode() {
   if (authorFilter) authorFilter.value = "";
   if (sortSelect) sortSelect.value = "popular";
 
-  document.querySelectorAll(".chip-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.chip === "all");
-  });
+  updateCategoryActiveState();
 }
 
 function goHome(e) {
@@ -934,12 +1061,94 @@ function setActiveChip(chip) {
   showShelfOnly = false;
   currentPage = 1;
 
-  document.querySelectorAll(".chip-btn").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.chip === chip);
-  });
+  updateCategoryActiveState();
 
   renderBooks();
 }
+
+
+function pickRandomFeaturedBook() {
+  if (!Array.isArray(books) || books.length === 0) return null;
+
+  const validBooks = books.filter((book) => Number(book.id) && book.file);
+  if (!validBooks.length) return null;
+
+  const randomIndex = Math.floor(Math.random() * validBooks.length);
+  return validBooks[randomIndex];
+}
+
+function renderFeaturedBook() {
+  const featuredBook = pickRandomFeaturedBook();
+  if (!featuredBook) return;
+
+  featuredBookId = featuredBook.id;
+
+  if (featuredCover) {
+    featuredCover.onerror = null;
+    featuredCover.src = featuredBook.cover || "images/default.jpg";
+    featuredCover.alt = `Bìa ${featuredBook.title || "truyện đề cử"}`;
+    featuredCover.onerror = () => {
+      featuredCover.onerror = null;
+      featuredCover.src = "images/default.jpg";
+    };
+  }
+
+  if (featuredTitle) {
+    featuredTitle.textContent = featuredBook.title || "Truyện đề cử hôm nay";
+  }
+
+  if (featuredDesc) {
+    featuredDesc.textContent =
+      featuredBook.desc ||
+      (Array.isArray(featuredBook.tags) && featuredBook.tags.length
+        ? `Thể loại: ${featuredBook.tags.join(", ")}`
+        : "Một câu chuyện ngẫu nhiên đang chờ bạn khám phá.");
+  }
+}
+
+function openFeaturedBook() {
+  if (!featuredBookId) {
+    renderFeaturedBook();
+  }
+
+  if (featuredBookId) {
+    openReader(featuredBookId, 0);
+  }
+}
+
+
+
+function pickRandomRankingBooks(limit = 5) {
+  if (!Array.isArray(books) || books.length === 0) return [];
+
+  const validBooks = books.filter((book) => Number(book.id) && book.file);
+  const shuffled = [...validBooks].sort(() => Math.random() - 0.5);
+
+  return shuffled.slice(0, limit);
+}
+
+function renderRandomRankings() {
+  const rankingBooks = pickRandomRankingBooks(5);
+
+  if (rankingList) {
+    rankingList.innerHTML = rankingBooks
+      .map((book) => `
+        <li data-book-id="${escapeHtml(book.id)}">${escapeHtml(book.title || "Không có tên")}</li>
+      `)
+      .join("");
+  }
+
+  if (mobileRankingMenu) {
+    mobileRankingMenu.innerHTML = rankingBooks
+      .map((book) => `
+        <button class="mobile-subitem" type="button" data-ranking-book="${escapeHtml(book.id)}">
+          ${escapeHtml(book.title || "Không có tên")}
+        </button>
+      `)
+      .join("");
+  }
+}
+
 
 async function loadBooks() {
   try {
@@ -970,11 +1179,29 @@ async function loadBooks() {
       )
     );
 
+    renderCategoryControls();
+    collapseCategoryExtrasByDefault();
+    renderFeaturedBook();
+    renderRandomRankings();
     renderBooks();
   } catch (error) {
     console.error("Không tải được books-index.json:", error);
 
-    if (booksGrid) {
+
+  if (rankingList) {
+    rankingList.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const item = target.closest("[data-book-id]");
+      if (!item) return;
+
+      e.preventDefault();
+      openReader(item.dataset.bookId, 0);
+    });
+  }
+
+  if (booksGrid) {
       booksGrid.innerHTML =
         '<div class="empty-state">Không tải được dữ liệu truyện. Hãy chạy web bằng local server.</div>';
     }
@@ -986,6 +1213,17 @@ async function loadBooks() {
 }
 
 function bindEvents() {
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const toggleBtn = target.closest("[data-category-toggle]");
+    if (toggleBtn) {
+      e.preventDefault();
+      toggleCategoryList(toggleBtn);
+    }
+  });
+
   if (homeBtn) homeBtn.addEventListener("click", goHome);
   if (homeLink) homeLink.addEventListener("click", goHome);
   if (shelfLink) shelfLink.addEventListener("click", openShelfView);
@@ -1134,15 +1372,22 @@ function bindEvents() {
     });
   }
 
-  document.querySelectorAll(".menu-list a").forEach((link) => {
-    link.addEventListener("click", (e) => {
+  const menuList = document.querySelector(".menu-list");
+  if (menuList) {
+    menuList.addEventListener("click", (e) => {
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const link = target.closest("a[data-chip]");
+      if (!link) return;
+
       e.preventDefault();
       const chip = link.dataset.chip || "all";
       setActiveChip(chip);
       closeMobilePanels();
       updateMobileToggleState();
     });
-  });
+  }
 
   if (backBtn) {
     backBtn.addEventListener("click", backHome);
@@ -1234,8 +1479,16 @@ function bindEvents() {
   }
 
   if (openFeaturedBtn) {
-    openFeaturedBtn.addEventListener("click", () => {
-      openReader(1, 0);
+    openFeaturedBtn.addEventListener("click", openFeaturedBook);
+  }
+
+  if (featuredCard) {
+    featuredCard.addEventListener("click", openFeaturedBook);
+    featuredCard.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openFeaturedBook();
+      }
     });
   }
 
@@ -1293,6 +1546,10 @@ function initDomRefs() {
   scrollTopBtn = $("scrollTopBtn");
   scrollBooksBtn = $("scrollBooksBtn");
   openFeaturedBtn = $("openFeaturedBtn");
+  featuredCard = $("featuredCard");
+  featuredCover = $("featuredCover");
+  featuredTitle = $("featuredTitle");
+  featuredDesc = $("featuredDesc");
   homeBtn = $("homeBtn");
   homeLink = $("homeLink");
   rankingLink = $("rankingLink");
@@ -1305,6 +1562,7 @@ function initDomRefs() {
   mobileCategoryToggle = $("mobileCategoryToggle");
   mobileRankingMenu = $("mobileRankingMenu");
   mobileCategoryMenu = $("mobileCategoryMenu");
+  rankingList = $("rankingList");
 
   shelfLink = $("shelfLink") || document.querySelector('.nav a:nth-child(4)');
   booksPanelTitle = $("booksPanelTitle");
