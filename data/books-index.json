@@ -9,7 +9,7 @@
     "popularity": 97,
     "desc": "Vào năm thứ mười công lược Lục Thanh Hứa, anh ta đã ép tôi lên bàn phẫu thuật để lấy ký ức của mình.",
     "chapterCount": 8,
-    "cover": "images/book1.jpg",
+    "cover": "https://mtruyenhay.com/wp-content/uploads/2024/06/trang-nay-soi-duong-xua-1.png",
     "file": "data/books/0000/book-1.json"
   },
   {
@@ -61200,7 +61200,7 @@
   {
     "file": "data/books/7000/book-7419.json",
     "id": 7419,
-    "title": "Chồng Tôi Giả C h e c Để Cướp Chị Dâu",
+    "title": "Chồng Tôi Giả Chết Để Cướp Chị Dâu",
     "author": "",
     "tags": [
       "Hiện đại"

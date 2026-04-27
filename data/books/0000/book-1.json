@@ -2,10 +2,12 @@
   "id": 1,
   "title": "Sau Khi Tôi Bị Ép Cấy Ghép Ký Ức, Chồng Và Con Trai Đều Phát Điên",
   "author": "Zhihu",
-  "tags": ["Ngôn tình"],
+  "tags": [
+    "Ngôn tình"
+  ],
   "popularity": 97,
   "desc": "Vào năm thứ mười công lược Lục Thanh Hứa, anh ta đã ép tôi lên bàn phẫu thuật để lấy ký ức của mình.",
-  "cover": "images/book1.jpg",
+  "cover": "images/cover1.jpg",
   "chapters": [
     {
       "title": "Chương 1",

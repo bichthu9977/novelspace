@@ -8,6 +8,7 @@ let showShelfOnly = false;
 
 let lastScrollY = 0;
 let mobileTopbarTicking = false;
+let currentFetchController = null;
 
 const booksPerPage = 6;
 
@@ -58,8 +59,6 @@ let homeBtn;
 let homeLink;
 let shelfLink;
 let booksPanelTitle;
-let rankingLink;
-let categoryLink;
 let mobileSearchToggle;
 let mobileMenuToggle;
 let searchWrap;
@@ -327,6 +326,7 @@ function normalizeBook(fullBook, fallback = {}) {
     desc: fullBook?.desc || fallback?.desc || "",
     cover: fullBook?.cover || fallback?.cover || "images/default.jpg",
     file: fullBook?.file || fallback?.file || "",
+    seoUrl: fullBook?.seoUrl || fallback?.seoUrl || "",
     chapterCount:
       normalizedChapters.length ||
       Number(fullBook?.chapterCount ?? fallback?.chapterCount ?? 0),
@@ -406,17 +406,20 @@ function saveReadingProgress() {
   localStorage.setItem(STORAGE_KEYS.lastBookId, String(currentBook.id));
 }
 
+function hasReadingProgress(bookId) {
+  return String(bookId) in getReadingProgressMap();
+}
+
 function getProgressText(book) {
   const totalChapters = getBookChapterCount(book);
   if (!totalChapters) return "Chưa có chương";
 
-  const savedIndex = getReadingProgress(book.id);
-  const currentChapter = Math.min(savedIndex + 1, totalChapters);
-
-  if (savedIndex <= 0) {
-    return `Đang đọc: Chương 1/${totalChapters}`;
+  if (!hasReadingProgress(book.id)) {
+    return `Chưa đọc • ${totalChapters} chương`;
   }
 
+  const savedIndex = getReadingProgress(book.id);
+  const currentChapter = Math.min(savedIndex + 1, totalChapters);
   return `Đang đọc: Chương ${currentChapter}/${totalChapters}`;
 }
 
@@ -739,6 +742,7 @@ function renderBooks() {
         src="${escapeHtml(book.cover || "images/default.jpg")}"
         alt="Bìa ${escapeHtml(book.title || "")}"
         loading="lazy"
+        decoding="async"
         onerror="this.onerror=null;this.src='images/default.jpg'"
       />
       <div class="book-body">
@@ -893,8 +897,14 @@ async function openReader(bookId, chapterIndex = null) {
   const bookSummary = books.find((item) => Number(item.id) === Number(bookId));
   if (!bookSummary) return;
 
+  if (currentFetchController) {
+    currentFetchController.abort();
+  }
+  currentFetchController = new AbortController();
+  const { signal } = currentFetchController;
+
   try {
-    const res = await fetch(bookSummary.file, { cache: "no-store" });
+    const res = await fetch(bookSummary.file, { signal });
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
@@ -911,6 +921,8 @@ async function openReader(bookId, chapterIndex = null) {
       readerCover.onerror = null;
       readerCover.src = fullBook.cover || "images/default.jpg";
       readerCover.alt = `Bìa ${fullBook.title || ""}`;
+      readerCover.loading = "lazy";
+      readerCover.decoding = "async";
       readerCover.onerror = () => {
         readerCover.onerror = null;
         readerCover.src = "images/default.jpg";
@@ -963,6 +975,7 @@ async function openReader(bookId, chapterIndex = null) {
     currentChapterIndex = finalChapterIndex;
     openChapter(finalChapterIndex);
   } catch (error) {
+    if (error.name === "AbortError") return;
     console.error("Không tải được file truyện:", error);
     alert("Không mở được truyện này.");
   }
@@ -1045,6 +1058,8 @@ function openShelfView(e) {
 
   showShelfOnly = true;
   currentPage = 1;
+  activeChip = "all";
+  updateCategoryActiveState();
 
   if (readerView?.classList.contains("active")) {
     backHome();
@@ -1069,6 +1084,11 @@ function setActiveChip(chip) {
 }
 
 
+
+
+function openBookFromList(bookId) {
+  goToBook(bookId, 0);
+}
 
 function goToBook(bookId, chapterIndex = 0) {
   const id = Number(bookId);
@@ -1174,6 +1194,8 @@ function renderFeaturedBook() {
     featuredCover.onerror = null;
     featuredCover.src = featuredBook.cover || "images/default.jpg";
     featuredCover.alt = `Bìa ${featuredBook.title || "truyện đề cử"}`;
+    featuredCover.loading = "lazy";
+    featuredCover.decoding = "async";
     featuredCover.onerror = () => {
       featuredCover.onerror = null;
       featuredCover.src = "images/default.jpg";
@@ -1199,7 +1221,7 @@ function openFeaturedBook() {
   }
 
   if (featuredBookId) {
-    goToBook(featuredBookId, 0);
+    openBookFromList(featuredBookId);
   }
 }
 
@@ -1243,9 +1265,25 @@ async function loadBooks() {
 
     booksGrid.innerHTML = '<div class="empty-state">Đang tải truyện...</div>';
 
-    const res = await fetch("data/books-index.json", { cache: "no-store" });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+    const booksIndexPaths = ["books-index-seo.json", "data/books-index.json", "books-index.json"];
+    let res = null;
+    let lastError = null;
+
+    for (const path of booksIndexPaths) {
+      try {
+        const currentRes = await fetch(path, { cache: "no-store" });
+        if (currentRes.ok) {
+          res = currentRes;
+          break;
+        }
+        lastError = new Error(`${path} → HTTP ${currentRes.status}`);
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (!res) {
+      throw lastError || new Error("Không tìm thấy books-index.json");
     }
 
     const data = await res.json();
@@ -1275,21 +1313,7 @@ async function loadBooks() {
   } catch (error) {
     console.error("Không tải được books-index.json:", error);
 
-
-  if (rankingList) {
-    rankingList.addEventListener("click", (e) => {
-      const target = e.target;
-      if (!(target instanceof HTMLElement)) return;
-
-      const item = target.closest("[data-book-id]");
-      if (!item) return;
-
-      e.preventDefault();
-      goToBook(item.dataset.bookId, 0);
-    });
-  }
-
-  if (booksGrid) {
+    if (booksGrid) {
       booksGrid.innerHTML =
         '<div class="empty-state">Không tải được dữ liệu truyện. Hãy chạy web bằng local server.</div>';
     }
@@ -1322,15 +1346,13 @@ function bindEvents() {
       if (!item) return;
 
       e.preventDefault();
-      goToBook(item.dataset.bookId, 0);
+      openBookFromList(item.dataset.bookId);
     });
   }
 
   if (homeBtn) homeBtn.addEventListener("click", goHome);
   if (homeLink) homeLink.addEventListener("click", goHome);
   if (shelfLink) shelfLink.addEventListener("click", openShelfView);
-  if (rankingLink) rankingLink.addEventListener("click", openRankingSection);
-  if (categoryLink) categoryLink.addEventListener("click", openCategorySection);
 
   if (mobileSearchToggle) {
     mobileSearchToggle.addEventListener("click", toggleMobileSearch);
@@ -1371,7 +1393,7 @@ function bindEvents() {
 
       if (rankingBook) {
         e.preventDefault();
-        goToBook(rankingBook, 0);
+        openBookFromList(rankingBook);
       }
     });
   }
@@ -1386,7 +1408,7 @@ function bindEvents() {
       const saveId = target.getAttribute("data-save");
 
       if (readId) {
-        goToBook(readId, 0);
+        openBookFromList(readId);
         return;
       }
 
@@ -1419,7 +1441,7 @@ function bindEvents() {
 
       const card = target.closest(".book-card");
       if (card?.dataset.id) {
-        goToBook(card.dataset.id, getReadingProgress(card.dataset.id));
+        openBookFromList(card.dataset.id);
       }
     });
   }
@@ -1656,8 +1678,6 @@ function initDomRefs() {
   featuredDesc = $("featuredDesc");
   homeBtn = $("homeBtn");
   homeLink = $("homeLink");
-  rankingLink = $("rankingLink");
-  categoryLink = $("categoryLink");
   mobileSearchToggle = $("mobileSearchToggle");
   mobileMenuToggle = $("mobileMenuToggle");
   searchWrap = $("searchWrap");
