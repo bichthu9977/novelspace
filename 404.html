@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TruyệnFullVn - Đọc truyện online miễn phí</title>
+  <script>
+    // GitHub Pages 404 redirect trick
+    // Redirect /truyen/book-X/chuong-Y to index.html with the path in sessionStorage
+
+    // Get the path user tried to access
+    var path = window.location.pathname;
+
+    // Store path for index.html to process
+    sessionStorage.setItem('redirectPath', path);
+
+    // Redirect to home page
+    window.location.href = '/';
+  </script>
+</head>
+<body>
+  <p>Đang chuyển hướng...</p>
+</body>
+</html>

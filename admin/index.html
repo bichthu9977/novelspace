@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TruyệnFullVn Admin Dashboard</title>
+  <style>
+    :root {
+      --bg: #f5f1ea;
+      --card: #ffffff;
+      --surface: #faf6f1;
+      --primary: #8a3d2f;
+      --primary-dark: #6d2d22;
+      --text: #2d2d2d;
+      --muted: #777;
+      --border: #e7ddd2;
+      --danger: #b3261e;
+      --success: #188038;
+      --shadow: 0 10px 30px rgba(0,0,0,.07);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      background: linear-gradient(180deg, #9b4b3b, #7a3428);
+      color: white;
+      padding: 18px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      max-width: 1320px;
+      margin: 0 auto;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      font-family: Georgia, "Times New Roman", serif;
+      font-style: italic;
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: .6px;
+    }
+
+    .api-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input, textarea, select, button {
+      font: inherit;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 12px;
+      background: white;
+      color: var(--text);
+      outline: none;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--primary-dark);
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 11px 14px;
+      cursor: pointer;
+      font-weight: 700;
+      background: var(--primary);
+      color: white;
+    }
+
+    button.secondary {
+      background: var(--surface);
+      color: var(--primary-dark);
+      border: 1px solid var(--border);
+    }
+
+    button.danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    button.success {
+      background: var(--success);
+      color: white;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    main {
+      max-width: 1320px;
+      margin: 24px auto;
+      padding: 0 18px 40px;
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .card + .card {
+      margin-top: 16px;
+    }
+
+    .section-title {
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      margin: 0 0 14px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .result {
+      background: #1f1f1f;
+      color: #9ef59e;
+      padding: 14px;
+      border-radius: 12px;
+      min-height: 90px;
+      max-height: 280px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-size: 13px;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .book-list {
+      display: grid;
+      gap: 10px;
+      max-height: 470px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .book-item, .chapter-item {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 12px;
+      cursor: pointer;
+      display: grid;
+      gap: 6px;
+    }
+
+    .book-item:hover, .chapter-item:hover {
+      border-color: var(--primary);
+    }
+
+    .book-item.active, .chapter-item.active {
+      background: #fff4ed;
+      border-color: var(--primary);
+    }
+
+    .book-title, .chapter-title {
+      font-weight: 800;
+      color: var(--primary-dark);
+    }
+
+    .book-meta, .chapter-meta {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .layout-right {
+      display: grid;
+      gap: 18px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .tab-btn {
+      background: var(--surface);
+      color: var(--primary-dark);
+      border: 1px solid var(--border);
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .chapter-list {
+      display: grid;
+      gap: 10px;
+      max-height: 420px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .status-line {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .danger-zone {
+      border-color: rgba(179, 38, 30, .35);
+      background: #fff7f6;
+    }
+
+    @media (max-width: 920px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <div class="brand">TRUYENFULLVN ADMIN</div>
+        <div class="muted" style="color:#ffe8dc;">Local CMS dashboard</div>
+      </div>
+
+      <div class="api-box">
+        <input id="apiBase" style="width:260px;" value="http://127.0.0.1:8000" />
+        <input id="adminToken" style="width:260px;" placeholder="ADMIN_TOKEN" value="truyenfullvn_admin_123456" />
+        <button class="secondary" id="saveConfigBtn" type="button">Lưu cấu hình</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <aside>
+      <div class="card">
+        <h2 class="section-title">Tìm truyện</h2>
+        <div class="grid">
+          <input id="searchInput" placeholder="Nhập tên truyện / tác giả..." />
+          <div class="actions">
+            <button id="searchBtn" type="button">Tìm</button>
+            <button id="loadLatestBtn" class="secondary" type="button">Tải mới nhất</button>
+          </div>
+          <div class="muted" id="searchStatus">Chưa tìm kiếm.</div>
+          <div class="book-list" id="bookList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="section-title">Kết quả API</h2>
+        <pre class="result" id="resultBox">Ready.</pre>
+      </div>
+    </aside>
+
+    <section class="layout-right">
+      <div class="card">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="bookTab" type="button">Sửa truyện</button>
+          <button class="tab-btn" data-tab="chapterTab" type="button">Chương</button>
+          <button class="tab-btn" data-tab="addBookTab" type="button">Thêm truyện</button>
+          <button class="tab-btn" data-tab="statsTab" type="button">Thống kê</button>
+        </div>
+
+        <div id="bookTab" class="tab-panel active">
+          <h2 class="section-title">Thông tin truyện</h2>
+          <div class="grid">
+            <div class="grid-2">
+              <label>ID truyện
+                <input id="editBookId" readonly />
+              </label>
+              <label>SEO URL
+                <input id="editSeoUrl" placeholder="book-1" />
+              </label>
+            </div>
+
+            <label>Tên truyện
+              <input id="editTitle" />
+            </label>
+
+            <div class="grid-2">
+              <label>Tác giả
+                <input id="editAuthor" />
+              </label>
+              <label>Thể loại, cách nhau bằng dấu phẩy
+                <input id="editTags" />
+              </label>
+            </div>
+
+            <div class="grid-2">
+              <label>Popularity
+                <input id="editPopularity" type="number" />
+              </label>
+              <label>Chapter count
+                <input id="editChapterCount" type="number" />
+              </label>
+            </div>
+
+            <label>Ảnh bìa
+              <input id="editCover" />
+            </label>
+
+            <label>File JSON cũ
+              <input id="editFile" />
+            </label>
+
+            <label>Mô tả
+              <textarea id="editDesc"></textarea>
+            </label>
+
+            <div class="actions">
+              <button id="saveBookBtn" type="button">Lưu thay đổi</button>
+              <button id="reloadBookBtn" class="secondary" type="button">Load lại</button>
+            </div>
+
+            <div class="card danger-zone">
+              <h3 class="section-title">Chú Ý</h3>
+              <p class="muted">Xoá truyện sẽ xoá cả chương liên quan trong database.</p>
+              <button id="deleteBookBtn" class="danger" type="button">Xoá truyện này</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="chapterTab" class="tab-panel">
+          <h2 class="section-title">Quản lý chương</h2>
+
+          <div class="grid-2">
+            <div>
+              <div class="actions" style="margin-top:0;margin-bottom:12px;">
+                <button id="loadChaptersBtn" type="button">Load chương</button>
+                <button id="newChapterBtn" class="secondary" type="button">Chương mới</button>
+              </div>
+              <div class="chapter-list" id="chapterList"></div>
+            </div>
+
+            <div class="grid">
+              <label>ID truyện
+                <input id="chapterBookId" readonly />
+              </label>
+
+              <label>Số chương
+                <input id="chapterNumber" type="number" />
+              </label>
+
+              <label>Tiêu đề chương
+                <input id="chapterTitle" />
+              </label>
+
+              <label>Audio URL
+                <input id="chapterAudio" placeholder="https://audio.truyenfullvn.org/audio/..." />
+              </label>
+
+              <label>Nội dung chương, mỗi đoạn một dòng
+                <textarea id="chapterContent" style="min-height:260px;"></textarea>
+              </label>
+
+              <div class="actions">
+                <button id="addChapterBtn" class="success" type="button">Thêm chương</button>
+                <button id="updateChapterBtn" type="button">Sửa chương</button>
+                <button id="deleteChapterBtn" class="danger" type="button">Xoá chương</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="addBookTab" class="tab-panel">
+          <h2 class="section-title">Thêm truyện mới</h2>
+          <div class="grid">
+            <div class="grid-2">
+              <label>ID truyện
+                <input id="newBookId" type="number" placeholder="999999" />
+              </label>
+              <label>SEO URL
+                <input id="newSeoUrl" placeholder="truyen-moi" />
+              </label>
+            </div>
+
+            <label>Tên truyện
+              <input id="newTitle" />
+            </label>
+
+            <div class="grid-2">
+              <label>Tác giả
+                <input id="newAuthor" />
+              </label>
+              <label>Thể loại
+                <input id="newTags" placeholder="Ngôn tình, Hiện đại" />
+              </label>
+            </div>
+
+            <label>Ảnh bìa
+              <input id="newCover" value="images/default.jpg" />
+            </label>
+
+            <label>Mô tả
+              <textarea id="newDesc"></textarea>
+            </label>
+
+            <button id="createBookBtn" class="success" type="button">Tạo truyện</button>
+          </div>
+        </div>
+
+        <div id="statsTab" class="tab-panel">
+          <h2 class="section-title">Thống kê nhanh</h2>
+          <div class="actions" style="margin-top:0;">
+            <button id="loadTrendingBtn" type="button">Load trending</button>
+            <button id="loadBooksCountBtn" class="secondary" type="button">Load 20 truyện mới</button>
+          </div>
+          <div class="status-line" id="statsStatus">Chưa tải thống kê.</div>
+          <div class="book-list" id="statsList" style="max-height:520px;margin-top:12px;"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  let selectedBook = null;
+  let selectedChapter = null;
+  let currentChapters = [];
+
+  const els = {
+    apiBase: $("apiBase"),
+    adminToken: $("adminToken"),
+    saveConfigBtn: $("saveConfigBtn"),
+    resultBox: $("resultBox"),
+
+    searchInput: $("searchInput"),
+    searchBtn: $("searchBtn"),
+    loadLatestBtn: $("loadLatestBtn"),
+    searchStatus: $("searchStatus"),
+    bookList: $("bookList"),
+
+    editBookId: $("editBookId"),
+    editSeoUrl: $("editSeoUrl"),
+    editTitle: $("editTitle"),
+    editAuthor: $("editAuthor"),
+    editTags: $("editTags"),
+    editPopularity: $("editPopularity"),
+    editChapterCount: $("editChapterCount"),
+    editCover: $("editCover"),
+    editFile: $("editFile"),
+    editDesc: $("editDesc"),
+    saveBookBtn: $("saveBookBtn"),
+    reloadBookBtn: $("reloadBookBtn"),
+    deleteBookBtn: $("deleteBookBtn"),
+
+    chapterBookId: $("chapterBookId"),
+    chapterNumber: $("chapterNumber"),
+    chapterTitle: $("chapterTitle"),
+    chapterAudio: $("chapterAudio"),
+    chapterContent: $("chapterContent"),
+    chapterList: $("chapterList"),
+    loadChaptersBtn: $("loadChaptersBtn"),
+    newChapterBtn: $("newChapterBtn"),
+    addChapterBtn: $("addChapterBtn"),
+    updateChapterBtn: $("updateChapterBtn"),
+    deleteChapterBtn: $("deleteChapterBtn"),
+
+    newBookId: $("newBookId"),
+    newSeoUrl: $("newSeoUrl"),
+    newTitle: $("newTitle"),
+    newAuthor: $("newAuthor"),
+    newTags: $("newTags"),
+    newCover: $("newCover"),
+    newDesc: $("newDesc"),
+    createBookBtn: $("createBookBtn"),
+
+    loadTrendingBtn: $("loadTrendingBtn"),
+    loadBooksCountBtn: $("loadBooksCountBtn"),
+    statsStatus: $("statsStatus"),
+    statsList: $("statsList"),
+  };
+
+  function apiBase() {
+    return els.apiBase.value.trim().replace(/\/$/, "");
+  }
+
+  function adminToken() {
+    return els.adminToken.value.trim();
+  }
+
+  function showResult(data) {
+    els.resultBox.textContent = typeof data === "string"
+      ? data
+      : JSON.stringify(data, null, 2);
+  }
+
+  function saveConfig() {
+    localStorage.setItem("adminApiBase", els.apiBase.value.trim());
+    localStorage.setItem("adminToken", els.adminToken.value.trim());
+    showResult("Đã lưu cấu hình admin.");
+  }
+
+  function loadConfig() {
+    const savedApi = localStorage.getItem("adminApiBase");
+    const savedToken = localStorage.getItem("adminToken");
+
+    if (savedApi) els.apiBase.value = savedApi;
+    if (savedToken) els.adminToken.value = savedToken;
+  }
+
+  async function apiFetch(path, options = {}) {
+    const headers = {
+      ...(options.headers || {}),
+    };
+
+    if (options.body && !headers["Content-Type"]) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    if (path.startsWith("/api/admin")) {
+      headers["x-admin-token"] = adminToken();
+    }
+
+    const res = await fetch(`${apiBase()}${path}`, {
+      ...options,
+      headers,
+    });
+
+    const text = await res.text();
+    let data = null;
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = text;
+    }
+
+    if (!res.ok) {
+      throw new Error(typeof data === "string" ? data : (data.detail || `HTTP ${res.status}`));
+    }
+
+    return data;
+  }
+
+  function tagsToArray(value) {
+    return String(value || "")
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+
+  function chaptersToText(content) {
+    return Array.isArray(content) ? content.join("\n") : "";
+  }
+
+  function textToParagraphs(text) {
+    return String(text || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+
+  function setTab(tabId) {
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === tabId);
+    });
+
+    document.querySelectorAll(".tab-panel").forEach((panel) => {
+      panel.classList.toggle("active", panel.id === tabId);
+    });
+  }
+
+  function renderBooks(list, container = els.bookList) {
+    container.innerHTML = "";
+
+    if (!Array.isArray(list) || !list.length) {
+      container.innerHTML = '<div class="muted">Không có dữ liệu.</div>';
+      return;
+    }
+
+    list.forEach((book) => {
+      const item = document.createElement("div");
+      item.className = "book-item";
+      item.dataset.bookId = book.id;
+
+      item.innerHTML = `
+        <div class="book-title">${escapeHtml(book.title || "Không có tên")}</div>
+        <div class="book-meta">ID: ${book.id} • ${book.chapter_count ?? book.chapterCount ?? 0} chương • Views: ${book.views ?? 0}</div>
+        <div class="book-meta">${escapeHtml(book.author || "Chưa rõ")} • ${escapeHtml(Array.isArray(book.tags) ? book.tags.join(", ") : "")}</div>
+      `;
+
+      item.addEventListener("click", () => selectBook(book.id));
+      container.appendChild(item);
+    });
+  }
+
+  function renderStatsBooks(list) {
+    renderBooks(list, els.statsList);
+  }
+
+  async function searchBooks() {
+    const q = els.searchInput.value.trim();
+    els.searchStatus.textContent = "Đang tìm...";
+
+    try {
+      const data = q
+        ? await apiFetch(`/api/search?q=${encodeURIComponent(q)}&limit=80`)
+        : await apiFetch("/api/books?skip=0&limit=80");
+
+      renderBooks(data);
+      els.searchStatus.textContent = `Tìm thấy ${Array.isArray(data) ? data.length : 0} truyện.`;
+      showResult(data);
+    } catch (err) {
+      els.searchStatus.textContent = `Lỗi: ${err.message}`;
+      showResult(err.message);
+    }
+  }
+
+  async function loadLatestBooks() {
+    els.searchStatus.textContent = "Đang tải...";
+    try {
+      const data = await apiFetch("/api/books?skip=0&limit=80");
+      renderBooks(data);
+      els.searchStatus.textContent = `Đã tải ${data.length} truyện.`;
+      showResult(data);
+    } catch (err) {
+      els.searchStatus.textContent = `Lỗi: ${err.message}`;
+      showResult(err.message);
+    }
+  }
+
+  async function selectBook(bookId) {
+    try {
+      const book = await apiFetch(`/api/books/${bookId}`);
+      selectedBook = book;
+      selectedChapter = null;
+
+      document.querySelectorAll(".book-item").forEach((item) => {
+        item.classList.toggle("active", Number(item.dataset.bookId) === Number(bookId));
+      });
+
+      fillBookForm(book);
+      clearChapterForm();
+      setTab("bookTab");
+      showResult(book);
+    } catch (err) {
+      showResult(err.message);
+    }
+  }
+
+  function fillBookForm(book) {
+    els.editBookId.value = book.id || "";
+    els.editSeoUrl.value = book.seo_url || book.seoUrl || "";
+    els.editTitle.value = book.title || "";
+    els.editAuthor.value = book.author || "";
+    els.editTags.value = Array.isArray(book.tags) ? book.tags.join(", ") : "";
+    els.editPopularity.value = book.popularity ?? 0;
+    els.editChapterCount.value = book.chapter_count ?? book.chapterCount ?? 0;
+    els.editCover.value = book.cover || "";
+    els.editFile.value = book.file || "";
+    els.editDesc.value = book.desc || "";
+    els.chapterBookId.value = book.id || "";
+  }
+
+  async function saveBook() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    const bookId = Number(els.editBookId.value);
+
+    const payload = {
+      title: els.editTitle.value.trim(),
+      author: els.editAuthor.value.trim(),
+      tags: tagsToArray(els.editTags.value),
+      popularity: Number(els.editPopularity.value || 0),
+      chapter_count: Number(els.editChapterCount.value || 0),
+      desc: els.editDesc.value,
+      cover: els.editCover.value.trim(),
+      file: els.editFile.value.trim(),
+      seo_url: els.editSeoUrl.value.trim() || `book-${bookId}`,
+    };
+
+    try {
+      const data = await apiFetch(`/api/admin/books/${bookId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+
+      selectedBook = data;
+      fillBookForm(data);
+      showResult(data);
+      alert("Đã lưu truyện.");
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  async function deleteBook() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    const bookId = Number(els.editBookId.value);
+    const ok = confirm(`Xoá truyện ID ${bookId}? Thao tác này không hoàn tác được.`);
+
+    if (!ok) return;
+
+    try {
+      const data = await apiFetch(`/api/admin/books/${bookId}`, {
+        method: "DELETE",
+      });
+
+      showResult(data);
+      selectedBook = null;
+      clearBookForm();
+      clearChapterForm();
+      await loadLatestBooks();
+      alert("Đã xoá truyện.");
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  function clearBookForm() {
+    [
+      els.editBookId,
+      els.editSeoUrl,
+      els.editTitle,
+      els.editAuthor,
+      els.editTags,
+      els.editPopularity,
+      els.editChapterCount,
+      els.editCover,
+      els.editFile,
+      els.editDesc,
+    ].forEach((el) => el.value = "");
+  }
+
+  async function createBook() {
+    const bookId = Number(els.newBookId.value);
+
+    if (!bookId || !els.newTitle.value.trim()) {
+      alert("Cần nhập ID và tên truyện.");
+      return;
+    }
+
+    const payload = {
+      id: bookId,
+      title: els.newTitle.value.trim(),
+      author: els.newAuthor.value.trim(),
+      tags: tagsToArray(els.newTags.value),
+      popularity: 100,
+      desc: els.newDesc.value,
+      chapter_count: 0,
+      cover: els.newCover.value.trim() || "images/default.jpg",
+      file: "",
+      seo_url: els.newSeoUrl.value.trim() || `book-${bookId}`,
+    };
+
+    try {
+      const data = await apiFetch("/api/admin/books", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      showResult(data);
+      alert("Đã tạo truyện.");
+      await selectBook(data.id);
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  async function loadChapters() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    try {
+      const book = await apiFetch(`/api/books/${selectedBook.id}`);
+      currentChapters = Array.isArray(book.chapters) ? book.chapters : [];
+      renderChapters(currentChapters);
+      showResult(currentChapters);
+    } catch (err) {
+      showResult(err.message);
+    }
+  }
+
+  function renderChapters(chapters) {
+    els.chapterList.innerHTML = "";
+
+    if (!chapters.length) {
+      els.chapterList.innerHTML = '<div class="muted">Truyện chưa có chương.</div>';
+      return;
+    }
+
+    chapters.forEach((chapter, index) => {
+      const chapterNumber = chapter.chapter_number || chapter.chapterNumber || index + 1;
+      const item = document.createElement("div");
+      item.className = "chapter-item";
+      item.dataset.chapterNumber = chapterNumber;
+
+      item.innerHTML = `
+        <div class="chapter-title">${escapeHtml(chapter.title || `Chương ${chapterNumber}`)}</div>
+        <div class="chapter-meta">Chương ${chapterNumber} • ${Array.isArray(chapter.content) ? chapter.content.length : 0} đoạn</div>
+        <div class="chapter-meta">${chapter.audio_url || chapter.audio ? "Có audio" : "Chưa có audio"}</div>
+      `;
+
+      item.addEventListener("click", () => selectChapter(chapter, chapterNumber));
+      els.chapterList.appendChild(item);
+    });
+  }
+
+  function selectChapter(chapter, chapterNumber) {
+    selectedChapter = chapter;
+
+    document.querySelectorAll(".chapter-item").forEach((item) => {
+      item.classList.toggle("active", Number(item.dataset.chapterNumber) === Number(chapterNumber));
+    });
+
+    els.chapterBookId.value = selectedBook?.id || "";
+    els.chapterNumber.value = chapterNumber;
+    els.chapterTitle.value = chapter.title || `Chương ${chapterNumber}`;
+    els.chapterAudio.value = chapter.audio_url || chapter.audio || "";
+    els.chapterContent.value = chaptersToText(chapter.content);
+  }
+
+  function clearChapterForm() {
+    selectedChapter = null;
+    els.chapterBookId.value = selectedBook?.id || "";
+    els.chapterNumber.value = "";
+    els.chapterTitle.value = "";
+    els.chapterAudio.value = "";
+    els.chapterContent.value = "";
+  }
+
+  function newChapter() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    clearChapterForm();
+    els.chapterBookId.value = selectedBook.id;
+    els.chapterNumber.value = (currentChapters?.length || 0) + 1;
+    els.chapterTitle.value = `Chương ${els.chapterNumber.value}`;
+    setTab("chapterTab");
+  }
+
+  async function addChapter() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    const bookId = Number(selectedBook.id);
+    const chapterNumber = Number(els.chapterNumber.value);
+
+    if (!chapterNumber) {
+      alert("Cần nhập số chương.");
+      return;
+    }
+
+    const payload = {
+      chapter_number: chapterNumber,
+      title: els.chapterTitle.value.trim() || `Chương ${chapterNumber}`,
+      content: textToParagraphs(els.chapterContent.value),
+      audio_url: els.chapterAudio.value.trim(),
+    };
+
+    try {
+      const data = await apiFetch(`/api/admin/books/${bookId}/chapters`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+
+      showResult(data);
+      alert("Đã thêm chương.");
+      await loadChapters();
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  async function updateChapter() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    const bookId = Number(selectedBook.id);
+    const oldChapterNumber = selectedChapter
+      ? Number(selectedChapter.chapter_number || selectedChapter.chapterNumber || els.chapterNumber.value)
+      : Number(els.chapterNumber.value);
+
+    const payload = {
+      chapter_number: Number(els.chapterNumber.value),
+      title: els.chapterTitle.value.trim(),
+      content: textToParagraphs(els.chapterContent.value),
+      audio_url: els.chapterAudio.value.trim(),
+    };
+
+    try {
+      const data = await apiFetch(`/api/admin/books/${bookId}/chapters/${oldChapterNumber}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+
+      showResult(data);
+      alert("Đã sửa chương.");
+      await loadChapters();
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  async function deleteChapter() {
+    if (!selectedBook) {
+      alert("Chọn truyện trước.");
+      return;
+    }
+
+    const bookId = Number(selectedBook.id);
+    const chapterNumber = Number(els.chapterNumber.value);
+
+    if (!chapterNumber) {
+      alert("Chọn chương trước.");
+      return;
+    }
+
+    const ok = confirm(`Xoá book ${bookId}, chương ${chapterNumber}?`);
+    if (!ok) return;
+
+    try {
+      const data = await apiFetch(`/api/admin/books/${bookId}/chapters/${chapterNumber}`, {
+        method: "DELETE",
+      });
+
+      showResult(data);
+      clearChapterForm();
+      await loadChapters();
+      alert("Đã xoá chương.");
+    } catch (err) {
+      showResult(err.message);
+      alert(`Lỗi: ${err.message}`);
+    }
+  }
+
+  async function loadTrending() {
+    try {
+      const data = await apiFetch("/api/trending?limit=20");
+      renderStatsBooks(data);
+      els.statsStatus.textContent = `Trending: ${data.length} truyện.`;
+      showResult(data);
+    } catch (err) {
+      els.statsStatus.textContent = `Lỗi: ${err.message}`;
+      showResult(err.message);
+    }
+  }
+
+  async function loadStatsLatest() {
+    try {
+      const data = await apiFetch("/api/books?skip=0&limit=20");
+      renderStatsBooks(data);
+      els.statsStatus.textContent = `Latest: ${data.length} truyện.`;
+      showResult(data);
+    } catch (err) {
+      els.statsStatus.textContent = `Lỗi: ${err.message}`;
+      showResult(err.message);
+    }
+  }
+
+  function escapeHtml(text) {
+    return String(text ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function bindEvents() {
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => setTab(btn.dataset.tab));
+    });
+
+    els.saveConfigBtn.addEventListener("click", saveConfig);
+    els.searchBtn.addEventListener("click", searchBooks);
+    els.loadLatestBtn.addEventListener("click", loadLatestBooks);
+    els.searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") searchBooks();
+    });
+
+    els.saveBookBtn.addEventListener("click", saveBook);
+    els.reloadBookBtn.addEventListener("click", () => selectedBook && selectBook(selectedBook.id));
+    els.deleteBookBtn.addEventListener("click", deleteBook);
+
+    els.createBookBtn.addEventListener("click", createBook);
+
+    els.loadChaptersBtn.addEventListener("click", loadChapters);
+    els.newChapterBtn.addEventListener("click", newChapter);
+    els.addChapterBtn.addEventListener("click", addChapter);
+    els.updateChapterBtn.addEventListener("click", updateChapter);
+    els.deleteChapterBtn.addEventListener("click", deleteChapter);
+
+    els.loadTrendingBtn.addEventListener("click", loadTrending);
+    els.loadBooksCountBtn.addEventListener("click", loadStatsLatest);
+  }
+
+  loadConfig();
+  bindEvents();
+  loadLatestBooks();
+</script>
+</body>
+</html>

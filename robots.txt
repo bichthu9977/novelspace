@@ -1,4 +1,20 @@
+# TruyenFullvn robots.txt
+# Allow all crawlers to index the site
+
 User-agent: *
 Allow: /
+Disallow: /.git/
+Disallow: /.venv/
+Disallow: /node_modules/
+Disallow: /generate_sitemap.py
+Disallow: /fix_covers.py
+Disallow: /data/books/
 
+# Sitemap location
 Sitemap: https://truyenfullvn.org/sitemap.xml
+
+# Crawl delay (be nice to servers)
+Crawl-delay: 1
+
+# Request rate (requests per second)
+Request-rate: 1/1s

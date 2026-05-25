@@ -1,22 +1,36 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HLYBNDJ87M"></script>
+
+    <script>
+
+      window.dataLayer = window.dataLayer || [];
+
+      function gtag(){dataLayer.push(arguments);}
+
+      gtag('js', new Date());
+
+      gtag('config', 'G-HLYBNDJ87M');
+
+    </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <base href="/" />
 
-  <title>Truyện Full - Đọc truyện online miễn phí</title>
+  <title>TruyệnFullVn - Đọc truyện online miễn phí</title>
   <meta
     name="description"
-    content="Truyện Full VN là kho truyện online miễn phí, đọc truyện ngôn tình, hiện đại, cổ đại, xuyên không, sủng và chữa lành được cập nhật nhanh."
+    content="TruyệnFullVn là kho truyện online miễn phí, đọc truyện ngôn tình, hiện đại, cổ đại, xuyên không, sủng và chữa lành được cập nhật nhanh."
   />
   <meta
     name="keywords"
-    content="Truyện Full Vn, đọc truyện online, truyện ngôn tình, truyện hiện đại, truyện cổ đại, truyện xuyên không, truyện miễn phí"
+    content="TruyệnFullVn, đọc truyện online, truyện ngôn tình, truyện hiện đại, truyện cổ đại, truyện xuyên không, truyện miễn phí"
   />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://truyenfullvn.org/" />
 
-  <meta property="og:title" content="Truyện Full  - Đọc truyện online miễn phí" />
+  <meta property="og:title" content="TruyệnFullVn - Đọc truyện online miễn phí" />
   <meta
     property="og:description"
     content="Kho truyện online miễn phí, nhiều thể loại hấp dẫn, giao diện đọc thoải mái trên điện thoại và máy tính."
@@ -26,7 +40,7 @@
   <meta property="og:image" content="https://truyenfullvn.org/images/default.jpg" />
 
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Truyện Full - Đọc truyện online miễn phí" />
+  <meta name="twitter:title" content="TruyệnFullVn - Đọc truyện online miễn phí" />
   <meta
     name="twitter:description"
     content="Kho truyện online miễn phí, nhiều thể loại hấp dẫn, cập nhật nhanh."
@@ -35,12 +49,13 @@
 
   <link rel="icon" href="favicon.ico" />
   <link rel="apple-touch-icon" href="favicon_180.png" />
+  <link rel="sitemap" href="sitemap.xml" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand" id="homeBtn">Truyện Full</div>
+      <div class="brand" id="homeBtn">TruyệnFullVn</div>
 
       <div class="topbar-actions-mobile">
         <button
@@ -99,6 +114,8 @@
         </div>
 
         <a href="#" id="shelfLink">Tủ sách</a>
+        <a href="#" id="loginLink">Đăng nhập</a>
+        <a href="#" id="logoutLink" class="hidden">Đăng xuất</a>
       </nav>
     </div>
   </header>
@@ -165,6 +182,7 @@
         <div class="panel toolbar">
           <div class="filters">
             <select id="sortSelect">
+              <option value="random">Sắp xếp: Ngẫu nhiên</option>
               <option value="popular">Sắp xếp: Phổ biến</option>
               <option value="title">Sắp xếp: A → Z</option>
               <option value="chapters">Sắp xếp: Tổng số chương</option>
@@ -181,6 +199,21 @@
             <button class="chip-btn" data-chip="Sủng" type="button">Sủng</button>
             <button class="chip-btn" data-chip="Chữa lành" type="button">Chữa lành</button>
           </div>
+        </div>
+
+
+        <div class="panel continue-panel hidden" id="continueReadingPanel">
+          <div class="continue-head">
+            <div>
+              <div class="section-title section-title-main">Tiếp tục đọc</div>
+              <p class="continue-subtitle">Truyện bạn đang đọc sẽ tự lưu theo tài khoản hoặc trên máy hiện tại.</p>
+            </div>
+            <div class="continue-actions">
+              <button class="ghost-btn" id="continueToggleBtn" type="button">Thêm ▾</button>
+              <button class="ghost-btn" id="continueRefreshBtn" type="button">Làm mới</button>
+            </div>
+          </div>
+          <div class="continue-grid" id="continueReadingGrid"></div>
         </div>
 
         <div class="panel books-panel" id="booksSection">
@@ -243,10 +276,44 @@
 
         <div class="reader-body" id="readerBody"></div>
 
+        <section id="commentsSection" class="comments-section">
+          <div class="comments-head">
+            <div>
+              <h2>Bình luận truyện</h2>
+              <p id="commentsHint">Bình luận hiển thị chung cho toàn bộ truyện.</p>
+            </div>
+            <button id="commentsRefreshBtn" class="ghost-btn comments-refresh-btn" type="button">Tải lại</button>
+          </div>
+
+          <div id="commentForm" class="comment-form">
+            <textarea id="commentInput" maxlength="1000" placeholder="Viết bình luận của bạn về truyện này..."></textarea>
+            <div class="comment-form-footer">
+              <span id="commentStatus" class="comment-status"></span>
+              <button id="commentSubmitBtn" class="solid-btn" type="button">Gửi bình luận</button>
+            </div>
+          </div>
+
+          <div id="commentsList" class="comments-list">
+            <div class="comment-empty">Chưa có bình luận nào.</div>
+          </div>
+        </section>
+
+
         <div class="reader-footer">
           <button class="ghost-btn" id="prevChapterBtn" type="button">← Chương trước</button>
           <button class="solid-btn" id="nextChapterBtn" type="button">Chương tiếp →</button>
         </div>
+        <section id="relatedBooksSection" class="related-books-section hidden">
+          <div class="related-books-head">
+            <div>
+              <h2>Truyện cùng thể loại</h2>
+              <p>Gợi ý ngẫu nhiên dựa trên thể loại của truyện bạn đang đọc.</p>
+            </div>
+            <button id="relatedMoreBtn" class="ghost-btn related-refresh-btn" type="button">Xem thêm</button>
+          </div>
+          <div id="relatedBooksGrid" class="related-books-grid"></div>
+        </section>
+
       </article>
 
       <aside class="floating-tools">
@@ -259,6 +326,127 @@
     </section>
   </main>
 
+
+
+  <div id="accountModal" class="account-modal hidden" aria-hidden="true">
+    <div class="account-box" role="dialog" aria-modal="true" aria-labelledby="accountTitle">
+      <button id="accountCloseBtn" class="account-close-btn" type="button" aria-label="Đóng">×</button>
+
+      <div class="account-head">
+        <div>
+          <h2 id="accountTitle">Tài khoản của tôi</h2>
+          <p id="accountEmail" class="account-email">Chưa đăng nhập</p>
+        </div>
+        <button id="accountLogoutBtn" class="ghost-btn account-logout-btn" type="button">Đăng xuất</button>
+      </div>
+
+      <div class="account-tabs">
+        <button class="account-tab-btn active" type="button" data-account-tab="accountShelfPanel">Tủ sách</button>
+        <button class="account-tab-btn" type="button" data-account-tab="accountProgressPanel">Đang đọc</button>
+      </div>
+
+      <div id="accountShelfPanel" class="account-tab-panel active">
+        <div id="accountShelfList" class="account-list">
+          <div class="account-empty">Chưa có truyện trong tủ sách.</div>
+        </div>
+      </div>
+
+      <div id="accountProgressPanel" class="account-tab-panel">
+        <div id="accountProgressList" class="account-list">
+          <div class="account-empty">Chưa có tiến độ đọc.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="authModal" class="auth-modal hidden" aria-hidden="true">
+    <div class="auth-box" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <button id="authCloseBtn" class="auth-close-btn" type="button" aria-label="Đóng">×</button>
+      <h2 id="authTitle">Đăng nhập</h2>
+      <p class="auth-desc">Đăng nhập để lưu tủ sách và đồng bộ tiến độ đọc.</p>
+
+      <label class="auth-label" for="authEmail">Email</label>
+      <input id="authEmail" type="email" placeholder="email@example.com" autocomplete="email" />
+
+      <label class="auth-label" for="authPassword">Mật khẩu</label>
+      <div class="password-field">
+        <input id="authPassword" type="password" placeholder="Mật khẩu" autocomplete="current-password" />
+        <button class="password-toggle-btn" type="button" data-toggle-password="authPassword">Hiện</button>
+      </div>
+
+      <div id="authPasswordConfirmWrap" class="auth-confirm-wrap hidden">
+        <label class="auth-label" for="authPasswordConfirm">Nhập lại mật khẩu</label>
+        <div class="password-field">
+          <input id="authPasswordConfirm" type="password" placeholder="Nhập lại mật khẩu" autocomplete="new-password" />
+          <button class="password-toggle-btn" type="button" data-toggle-password="authPasswordConfirm">Hiện</button>
+        </div>
+      </div>
+
+      <button id="authLoginBtn" class="solid-btn auth-action-btn" type="button">Đăng nhập</button>
+      <button id="authModeRegisterBtn" class="ghost-btn auth-action-btn" type="button">Đăng ký</button>
+      <button id="authRegisterBtn" class="solid-btn auth-action-btn hidden" type="button">Tạo tài khoản</button>
+      <button id="authBackLoginBtn" class="ghost-btn auth-action-btn hidden" type="button">Quay lại đăng nhập</button>
+
+      <div id="authMessage" class="auth-message"></div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="footer-content">
+      <div class="footer-links">
+        <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Chính sách riêng tư</a>
+        <span class="separator">•</span>
+        <a href="/terms-of-service" target="_blank" rel="noopener noreferrer">Điều khoản dịch vụ</a>
+        <span class="separator">•</span>
+        <a href="mailto:bichthu9977@gmail.com">Liên hệ</a>
+      </div>
+      <div class="footer-text">
+        <p>&copy; 2026 TruyenFullvn. Tất cả quyền được bảo lưu.</p>
+      </div>
+    </div>
+  </footer>
+
   <script src="script.js"></script>
+
+  <script>
+    (function () {
+      function syncAuthTitle() {
+        var title = document.getElementById("authTitle");
+        var confirmWrap = document.getElementById("authPasswordConfirmWrap");
+        if (!title) return;
+
+        var isRegister = confirmWrap && !confirmWrap.classList.contains("hidden");
+        title.textContent = isRegister ? "Đăng ký tài khoản" : "Đăng nhập";
+      }
+
+      document.addEventListener("click", function (event) {
+        var toggleBtn = event.target.closest("[data-toggle-password]");
+        if (toggleBtn) {
+          event.preventDefault();
+
+          var input = document.getElementById(toggleBtn.dataset.togglePassword);
+          if (!input) return;
+
+          var willShow = input.type === "password";
+          input.type = willShow ? "text" : "password";
+          toggleBtn.textContent = willShow ? "Ẩn" : "Hiện";
+          return;
+        }
+
+        if (
+          event.target.closest("#authModeRegisterBtn") ||
+          event.target.closest("#authBackLoginBtn") ||
+          event.target.closest("#loginLink")
+        ) {
+          setTimeout(syncAuthTitle, 0);
+          setTimeout(syncAuthTitle, 80);
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", syncAuthTitle);
+      window.addEventListener("load", syncAuthTitle);
+    })();
+  </script>
+
 </body>
 </html>

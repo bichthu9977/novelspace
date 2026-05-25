@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-generate.py — Tạo trang chương riêng cho Truyện Full Vn (Hướng B SEO)
+generate.py — Tạo trang chương riêng cho TruyenFullvn (Hướng B SEO)
 
 Cách dùng:
   python3 generate.py            # chỉ generate truyện mới / chưa đủ chương
@@ -38,8 +38,8 @@ def esc(text):
 
 
 def book_slug(seo_url):
-    """'truyen/ten-truyen-1.html'  →  'ten-truyen-1'"""
-    return seo_url.removeprefix("truyen/").removesuffix(".html")
+    """'ten-truyen-1'  →  'ten-truyen-1'"""
+    return seo_url.removeprefix("truyen/").removesuffix(".html").rstrip("/")
 
 
 # ── Template trang chương ─────────────────────────────────────────────────────
@@ -56,16 +56,15 @@ def render_chapter(book, chapter, idx, slug, total):
     book_title = book.get("title", "")
     author     = book.get("author", "") or "Chưa rõ"
     cover      = book.get("cover",  "images/default.jpg")
-    book_id    = book.get("id", "")
     tags_str   = esc(", ".join(book.get("tags") or []))
 
-    book_url    = f"{BASE_URL}/truyen/{slug}.html"
-    chapter_url = f"{BASE_URL}/truyen/{slug}/chuong-{num}.html"
-    reader_url  = f"{BASE_URL}/index.html#book-{book_id}-{num}"
+    book_url    = f"{BASE_URL}/truyen/{slug}/"
+    chapter_url = f"{BASE_URL}/truyen/{slug}/chuong-{num}/"
+    reader_url  = f"{BASE_URL}/truyen/{slug}/chuong-{num}"
 
-    prev_btn = (f'<a class="nav-btn prev" href="chuong-{idx}.html">← Chương trước</a>'
+    prev_btn = (f'<a class="nav-btn prev" href="../chuong-{idx}/">← Chương trước</a>'
                 if idx > 0 else "<span></span>")
-    next_btn = (f'<a class="nav-btn next" href="chuong-{num+1}.html">Chương tiếp →</a>'
+    next_btn = (f'<a class="nav-btn next" href="../chuong-{num+1}/">Chương tiếp →</a>'
                 if idx < total - 1 else "<span></span>")
 
     return f'''<!DOCTYPE html>
@@ -73,9 +72,9 @@ def render_chapter(book, chapter, idx, slug, total):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{esc(title)} | {esc(book_title)} | TruyenFullVn</title>
+  <title>{esc(title)} | {esc(book_title)} | TruyenFullvn</title>
   <meta name="description" content="{esc(desc)}">
-  <meta name="keywords" content="{tags_str}, đọc truyện online, TruyenFullVn">
+  <meta name="keywords" content="{tags_str}, đọc truyện online, TruyenFullvn">
   <link rel="canonical" href="{chapter_url}">
   <meta property="og:title" content="{esc(title)} | {esc(book_title)}">
   <meta property="og:description" content="{esc(desc)}">
@@ -85,7 +84,12 @@ def render_chapter(book, chapter, idx, slug, total):
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{esc(title)} | {esc(book_title)}">
   <meta name="twitter:description" content="{esc(desc)}">
-  <link rel="icon" href="../../favicon.ico">
+  <link rel="icon" href="../../../favicon.ico">
+  <script>
+    var p = window.location.pathname.replace(/\/$/, '');
+    sessionStorage.setItem('redirectPath', p);
+    window.location.replace('/');
+  </script>
   <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
@@ -126,12 +130,12 @@ def render_chapter(book, chapter, idx, slug, total):
 <body>
   <main class="page">
     <nav class="breadcrumb">
-      <a href="../../index.html">Trang chủ</a> ›
-      <a href="../{slug}.html">{esc(book_title)}</a> ›
+      <a href="../../../">Trang chủ</a> ›
+      <a href="../">{esc(book_title)}</a> ›
       {esc(title)}
     </nav>
     <header class="ch-header">
-      <a class="book-link" href="../{slug}.html">{esc(book_title)}</a>
+      <a class="book-link" href="../">{esc(book_title)}</a>
       <h1>{esc(title)}</h1>
       <div class="ch-meta">Tác giả: {esc(author)} • Chương {num}/{total}</div>
     </header>
@@ -140,7 +144,7 @@ def render_chapter(book, chapter, idx, slug, total):
 {content_html}
     </article>
     <nav class="ch-nav">{prev_btn}{next_btn}</nav>
-    <a class="reader-link" href="{reader_url}">Đọc trên TruyệnFull (chế độ reader đầy đủ) →</a>
+    <a class="reader-link" href="{reader_url}">Đọc trên TruyenFullvn (chế độ reader đầy đủ) →</a>
   </main>
 </body>
 </html>'''
@@ -157,13 +161,13 @@ def render_overview(book, slug, chapters):
     book_id    = book.get("id", "")
     total      = len(chapters)
 
-    book_url   = f"{BASE_URL}/truyen/{slug}.html"
-    reader_url = f"{BASE_URL}/index.html#book-{book_id}-1"
+    book_url   = f"{BASE_URL}/truyen/{slug}/"
+    reader_url = f"{BASE_URL}/truyen/{slug}/chuong-1"
     tags_html  = "".join(f'<span class="tag">{esc(t)}</span>' for t in tags)
     tags_meta  = esc(", ".join(tags))
 
     ch_items = "".join(
-        f'      <li><a href="{slug}/chuong-{i+1}.html">{esc(ch.get("title") or f"Chương {i+1}")}</a></li>\n'
+        f'      <li><a href="chuong-{i+1}/">{esc(ch.get("title") or f"Chương {i+1}")}</a></li>\n'
         for i, ch in enumerate(chapters)
     )
     ch_list_block = ""
@@ -191,20 +195,20 @@ def render_overview(book, slug, chapters):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{esc(book_title)} | TruyenFullVn</title>
+  <title>{esc(book_title)} | TruyệnFullVn</title>
   <meta name="description" content="{esc(desc)}">
-  <meta name="keywords" content="{tags_meta}, đọc truyện online, TruyenFullvn">
+  <meta name="keywords" content="{tags_meta}, đọc truyện online, TruyệnFullVn">
   <link rel="canonical" href="{book_url}">
-  <meta property="og:title" content="{esc(book_title)} | TruyenFullVn">
+  <meta property="og:title" content="{esc(book_title)} | TruyệnFullVn">
   <meta property="og:description" content="{esc(desc)}">
   <meta property="og:image" content="{BASE_URL}/{esc(cover)}">
   <meta property="og:url" content="{book_url}">
   <meta property="og:type" content="book">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="{esc(book_title)} | TruyenFullVn">
+  <meta name="twitter:title" content="{esc(book_title)} | TruyệnFullVn">
   <meta name="twitter:description" content="{esc(desc)}">
   <meta name="twitter:image" content="{BASE_URL}/{esc(cover)}">
-  <link rel="icon" href="../favicon.ico">
+  <link rel="icon" href="../../favicon.ico">
   <script type="application/ld+json">
 {schema}
   </script>
@@ -225,24 +229,24 @@ def render_overview(book, slug, chapters):
     .btn-g{{background:#fff5ee;color:#6d2d22;border:1px solid #f0d7c5;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:700}}
     .ch-list{{margin-top:28px;background:#fff;border:1px solid #e7ddd2;border-radius:18px;padding:24px;box-shadow:0 10px 30px rgba(0,0,0,.06)}}
     .ch-list-title{{font-size:20px;color:#6d2d22;margin-bottom:16px}}
-    .ch-ol{{list-style:decimal;padding-left:20px;display:grid;grid-template-columns:repeat(2,1fr);column-gap:24px;gap:6px}}
+    .ch-ol{{list-style:decimal;padding-left:20px;display:grid;column-count:2;column-gap:24px;gap:6px}}
     .ch-ol li a{{color:#2d2d2d;text-decoration:none;padding:5px 0;display:block;font-size:15px}}
     .ch-ol li a:hover{{color:#8a3d2f}}
-    @media(max-width:720px){{.card{{grid-template-columns:1fr}}.cover{{width:160px;margin:0 auto}}.ch-ol{{grid-template-columns:1fr}}h1{{font-size:24px}}}}
+    @media(max-width:720px){{.card{{grid-template-columns:1fr}}.cover{{width:160px;margin:0 auto}}.ch-ol{{column-count:1}}h1{{font-size:24px}}}}
   </style>
 </head>
 <body>
   <main class="page">
-    <a class="back" href="../index.html">← Về trang chủ</a>
+    <a class="back" href="../../">← Về trang chủ</a>
     <article class="card">
-      <img class="cover" src="../{esc(cover)}" alt="Bìa {esc(book_title)}" loading="eager" decoding="async" onerror="this.src='../images/default.jpg'">
+      <img class="cover" src="../../{esc(cover)}" alt="Bìa {esc(book_title)}" loading="eager" decoding="async" onerror="this.src='../../images/default.jpg'">
       <section>
         <h1>{esc(book_title)}</h1>
         <div class="meta">Tác giả: {esc(author)} • {total} chương</div>
         <div class="tags">{tags_html}</div>
         <p class="desc">{esc(desc)}</p>
         <div class="btns">
-          <a class="btn-p" href="{slug}/chuong-1.html">Đọc từ đầu</a>
+          <a class="btn-p" href="chuong-1/">Đọc từ đầu</a>
           <a class="btn-g" href="{reader_url}">Đọc trên app</a>
         </div>
       </section>
@@ -291,6 +295,9 @@ def main():
     index = load_json(BOOKS_INDEX)
     print(f"  → {len(index)} truyện trong index\n")
 
+    # Đảm bảo thư mục truyen/ tồn tại
+    TRUYEN_DIR.mkdir(parents=True, exist_ok=True)
+
     sitemap_urls = [(f"{BASE_URL}/", "1.0", "daily")]
     created = skipped = errors = 0
 
@@ -303,15 +310,15 @@ def main():
         # Lọc theo --id nếu có
         if target_id is not None and entry.get("id") != target_id:
             slug = book_slug(seo_url)
-            sitemap_urls.append((f"{BASE_URL}/truyen/{slug}.html", "0.8", "weekly"))
+            sitemap_urls.append((f"{BASE_URL}/truyen/{slug}/", "0.8", "weekly"))
             ch_dir = TRUYEN_DIR / slug
-            for f in sorted(ch_dir.glob("chuong-*.html")) if ch_dir.exists() else []:
-                j = f.stem.replace("chuong-", "")
-                sitemap_urls.append((f"{BASE_URL}/truyen/{slug}/chuong-{j}.html", "0.7", "monthly"))
+            for f in sorted(ch_dir.glob("chuong-*/")) if ch_dir.exists() else []:
+                j = f.name.replace("chuong-", "")
+                sitemap_urls.append((f"{BASE_URL}/truyen/{slug}/chuong-{j}/", "0.7", "monthly"))
             continue
 
         slug     = book_slug(seo_url)
-        book_url = f"{BASE_URL}/truyen/{slug}.html"
+        book_url = f"{BASE_URL}/truyen/{slug}/"
         sitemap_urls.append((book_url, "0.8", "weekly"))
 
         # Load JSON truyện
@@ -338,12 +345,12 @@ def main():
             continue
 
         ch_dir         = TRUYEN_DIR / slug
-        existing_count = len(list(ch_dir.glob("chuong-*.html"))) if ch_dir.exists() else 0
+        existing_count = len(list(ch_dir.glob("chuong-*/"))) if ch_dir.exists() else 0
 
         # Thêm URL chương vào sitemap
         for j in range(len(chapters)):
             sitemap_urls.append((
-                f"{BASE_URL}/truyen/{slug}/chuong-{j+1}.html", "0.7", "monthly"
+                f"{BASE_URL}/truyen/{slug}/chuong-{j+1}/", "0.7", "monthly"
             ))
 
         if not force and target_id is None and existing_count == len(chapters):
@@ -351,15 +358,17 @@ def main():
             continue
 
         # Tạo thư mục chương
-        ch_dir.mkdir(parents=True, exist_ok=True)
+        ch_dir.mkdir(exist_ok=True)
 
         # Tạo trang tổng quan truyện
-        overview_path = TRUYEN_DIR / f"{slug}.html"
+        overview_path = ch_dir / "index.html"
         overview_path.write_text(render_overview(book, slug, chapters), encoding="utf-8")
 
         # Tạo từng trang chương
         for j, ch in enumerate(chapters):
-            ch_path = ch_dir / f"chuong-{j+1}.html"
+            ch_sub = ch_dir / f"chuong-{j+1}"
+            ch_sub.mkdir(exist_ok=True)
+            ch_path = ch_sub / "index.html"
             ch_path.write_text(render_chapter(book, ch, j, slug, len(chapters)), encoding="utf-8")
 
         created += 1
