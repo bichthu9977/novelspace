@@ -2,8 +2,22 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c ' *)",
-      "Bash(grep -vE \"^\\\\.|^data$|^images$|^truyen$|^\\\\.venv$\")",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:v for k,v in d.items\\(\\) if k!='chapters'}, ensure_ascii=False, indent=2\\)\\)\")"
+      "Bash(grep -v \"^images$\")",
+      "Bash(grep -v \"^data$\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep \"^book-[0-9]*\\\\.json$\")",
+      "Bash(sort -t- -k2 -n)",
+      "Bash(python3 generate.py --id 106)",
+      "Bash(time python3 *)",
+      "Bash(python3 generate.py --id 1)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'Total books: {len\\(d\\)}'\\)\")",
+      "Bash(sort -t'-' -k2 -n)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('data/books-index.json'\\)\\); print\\(json.dumps\\(d[0], ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('books-index-seo.json'\\)\\); print\\(json.dumps\\(d[0], ensure_ascii=False, indent=2\\)\\)\")",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('books-index-seo.json'\\)\\); [print\\(f'ID {e[\\\\\"id\\\\\"]}: {e[\\\\\"title\\\\\"]} → {e[\\\\\"seoUrl\\\\\"]}'\\) for e in d[1:6]]\")"
     ]
   }
 }
