@@ -125,6 +125,38 @@ def serve_favicon():
     return FileResponse(path)
 
 
+def serve_sitemap_file(filename: str):
+    path = FRONTEND_DIR / filename
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"{filename} not found")
+    return FileResponse(path, media_type="application/xml; charset=utf-8")
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def serve_sitemap_index():
+    return serve_sitemap_file("sitemap.xml")
+
+
+@app.get("/sitemap-books.xml", include_in_schema=False)
+def serve_sitemap_books():
+    return serve_sitemap_file("sitemap-books.xml")
+
+
+@app.get("/sitemap-chapters.xml", include_in_schema=False)
+def serve_sitemap_chapters():
+    return serve_sitemap_file("sitemap-chapters.xml")
+
+
+@app.get("/sitemap-books-{chunk_number}.xml", include_in_schema=False)
+def serve_sitemap_books_chunk(chunk_number: int):
+    return serve_sitemap_file(f"sitemap-books-{chunk_number}.xml")
+
+
+@app.get("/sitemap-chapters-{chunk_number}.xml", include_in_schema=False)
+def serve_sitemap_chapters_chunk(chunk_number: int):
+    return serve_sitemap_file(f"sitemap-chapters-{chunk_number}.xml")
+
+
 load_dotenv()
 
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
@@ -1212,9 +1244,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
 </html>"""
 
 
-@app.get("/truyen/{seo_url}/chuong-{chapter_number}", response_class=HTMLResponse, include_in_schema=False)
-@app.get("/truyen/{seo_url}/chuong-{chapter_number}/", response_class=HTMLResponse, include_in_schema=False)
-def read_chapter_page(seo_url: str, chapter_number: int, db: Session = Depends(get_db)):
+def _find_book_by_seo_url(db: Session, seo_url: str):
     book = db.query(Book).filter(Book.seo_url == seo_url).first()
 
     if not book and seo_url.startswith("book-"):
@@ -1222,9 +1252,10 @@ def read_chapter_page(seo_url: str, chapter_number: int, db: Session = Depends(g
         if raw_id.isdigit():
             book = db.query(Book).filter(Book.id == int(raw_id)).first()
 
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+    return book
 
+
+def _render_chapter_page_response(book, chapter_number: int, db: Session):
     chapter = db.query(Chapter).filter(
         Chapter.book_id == book.id,
         Chapter.chapter_number == chapter_number
@@ -1234,6 +1265,27 @@ def read_chapter_page(seo_url: str, chapter_number: int, db: Session = Depends(g
         raise HTTPException(status_code=404, detail="Chapter not found")
 
     total_chapters = book.chapter_count or db.query(Chapter).filter(Chapter.book_id == book.id).count()
-
     html = _render_hybrid_chapter_html(book, chapter, chapter_number, total_chapters)
     return HTMLResponse(content=html)
+
+
+@app.get("/truyen/{seo_url}/chuong-{chapter_number}", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/truyen/{seo_url}/chuong-{chapter_number}/", response_class=HTMLResponse, include_in_schema=False)
+def read_chapter_page(seo_url: str, chapter_number: int, db: Session = Depends(get_db)):
+    book = _find_book_by_seo_url(db, seo_url)
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    return _render_chapter_page_response(book, chapter_number, db)
+
+
+@app.get("/truyen/{seo_url}", response_class=HTMLResponse, include_in_schema=False)
+@app.get("/truyen/{seo_url}/", response_class=HTMLResponse, include_in_schema=False)
+def read_book_page(seo_url: str, db: Session = Depends(get_db)):
+    book = _find_book_by_seo_url(db, seo_url)
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    return _render_chapter_page_response(book, 1, db)
