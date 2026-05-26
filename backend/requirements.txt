@@ -20,6 +20,7 @@ python-multipart==0.0.29
 redis==5.0.1
 rsa==4.9.1
 six==1.17.0
+slowapi==0.1.9
 SQLAlchemy==2.0.49
 starlette==1.0.0
 typing-inspection==0.4.2

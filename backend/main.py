@@ -3,7 +3,7 @@ import json
 import logging
 from html import escape
 from pathlib import Path
-from fastapi import Header
+from fastapi import Header, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -36,6 +36,14 @@ from cache import (
     invalidate_public_book_cache,
     make_cache_key,
 )
+from rate_limit import (
+    BOOKMARK_RATE_LIMIT,
+    COMMENT_RATE_LIMIT,
+    LOGIN_RATE_LIMIT,
+    REGISTER_RATE_LIMIT,
+    limiter,
+    setup_rate_limiting,
+)
 from schemas import (
     BookResponse,
     BookDetailResponse,
@@ -52,6 +60,7 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger("truyenfullvn")
 
 app = FastAPI(title="TruyenFullvn API")
+setup_rate_limiting(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -516,7 +525,8 @@ def delete_chapter(
     }
 
 @app.post("/api/register", response_model=TokenResponse)
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit(REGISTER_RATE_LIMIT)
+def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     email = (user_data.email or "").strip().lower()
 
     if not email:
@@ -549,7 +559,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/api/login", response_model=TokenResponse)
-def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit(LOGIN_RATE_LIMIT)
+def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     email = (user_data.email or "").strip().lower()
     user = db.query(User).filter(User.email == email).first()
 
@@ -570,7 +581,9 @@ def me(current_user: User = Depends(get_current_user)):
 
 
 @app.post("/api/bookmarks")
+@limiter.limit(BOOKMARK_RATE_LIMIT)
 def add_bookmark(
+    request: Request,
     bookmark_data: BookmarkCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -615,7 +628,9 @@ def get_bookmarks(
 
 
 @app.delete("/api/bookmarks/{book_id}")
+@limiter.limit(BOOKMARK_RATE_LIMIT)
 def delete_bookmark(
+    request: Request,
     book_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -712,7 +727,9 @@ def get_book_comments(
 
 
 @app.post("/api/comments")
+@limiter.limit(COMMENT_RATE_LIMIT)
 def create_book_comment(
+    request: Request,
     comment_data: CommentCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
