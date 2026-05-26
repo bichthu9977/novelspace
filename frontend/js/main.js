@@ -34,6 +34,12 @@ import {
   fetchTrendingBooks,
   shuffleArray as shuffleRelatedArray
 } from "./related.js";
+import {
+  fetchNotifications,
+  fetchUnreadCount,
+  markAllNotificationsRead,
+  markNotificationRead
+} from "./notifications.js";
 import { setupChapterAudioPlayer as setupAudioPlayer } from "./audio.js";
 
 let books = [];
@@ -128,6 +134,11 @@ let mobileCategoryMenu;
 let rankingList;
 let loginLink;
 let logoutLink;
+let notificationBell;
+let notificationBadge;
+let notificationDropdown;
+let notificationList;
+let notificationMarkAllBtn;
 let authModal;
 let authCloseBtn;
 let authEmail;
@@ -639,6 +650,140 @@ function updateAuthUI() {
   }
 
   updateCommentLoginState();
+  updateNotificationUI();
+}
+
+function updateNotificationUI() {
+  const loggedIn = isLoggedIn();
+  const wrap = notificationBell?.closest(".notification-wrap");
+
+  if (wrap) {
+    wrap.classList.toggle("hidden", !loggedIn);
+  }
+
+  if (!loggedIn) {
+    closeNotifications();
+    renderNotificationBadge(0);
+    if (notificationList) {
+      notificationList.innerHTML = '<div class="notification-empty">Đăng nhập để xem thông báo.</div>';
+    }
+    return;
+  }
+
+  refreshUnreadNotifications();
+}
+
+function renderNotificationBadge(count) {
+  if (!notificationBadge) return;
+
+  const unread = Math.max(0, Number(count) || 0);
+  notificationBadge.textContent = unread > 99 ? "99+" : String(unread);
+  notificationBadge.classList.toggle("hidden", unread === 0);
+}
+
+function closeNotifications() {
+  if (!notificationDropdown) return;
+  notificationDropdown.classList.add("hidden");
+  notificationDropdown.setAttribute("aria-hidden", "true");
+  if (notificationBell) {
+    notificationBell.setAttribute("aria-expanded", "false");
+  }
+}
+
+function toggleNotifications(e) {
+  if (e) e.preventDefault();
+
+  if (!isLoggedIn()) {
+    openAuthModal(e);
+    return;
+  }
+
+  if (!notificationDropdown) return;
+
+  const willOpen = notificationDropdown.classList.contains("hidden");
+  notificationDropdown.classList.toggle("hidden", !willOpen);
+  notificationDropdown.setAttribute("aria-hidden", String(!willOpen));
+
+  if (notificationBell) {
+    notificationBell.setAttribute("aria-expanded", String(willOpen));
+  }
+
+  if (willOpen) {
+    loadNotifications();
+  }
+}
+
+function getNotificationTarget(notification) {
+  const payload = notification?.payload || {};
+  const seoUrl = payload.seo_url || (payload.book_id ? `book-${payload.book_id}` : "");
+  const chapterNumber = Number(payload.chapter_number || 1);
+
+  if (!seoUrl) return "";
+
+  return `/truyen/${seoUrl}/chuong-${Math.max(chapterNumber, 1)}`;
+}
+
+function formatNotificationTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return date.toLocaleString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+function renderNotifications(items) {
+  if (!notificationList) return;
+
+  if (!Array.isArray(items) || !items.length) {
+    notificationList.innerHTML = '<div class="notification-empty">Chưa có thông báo.</div>';
+    return;
+  }
+
+  notificationList.innerHTML = items.map((item) => {
+    const unread = !item.read_at;
+    return `
+      <button class="notification-item ${unread ? "unread" : ""}" type="button" data-notification-id="${escapeHtml(item.id)}" data-notification-target="${escapeHtml(getNotificationTarget(item))}">
+        <span class="notification-item-title">${escapeHtml(item.title || "Thông báo")}</span>
+        <span class="notification-item-message">${escapeHtml(item.message || "")}</span>
+        <span class="notification-item-time">${escapeHtml(formatNotificationTime(item.created_at))}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+async function refreshUnreadNotifications() {
+  if (!isLoggedIn() || !notificationBadge) return;
+
+  try {
+    const res = await fetchUnreadCount(getAuthHeaders());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderNotificationBadge(data.unread || 0);
+  } catch (err) {
+    console.warn("Không tải được số thông báo chưa đọc:", err);
+  }
+}
+
+async function loadNotifications() {
+  if (!isLoggedIn() || !notificationList) return;
+
+  notificationList.innerHTML = '<div class="notification-empty">Đang tải thông báo...</div>';
+
+  try {
+    const res = await fetchNotifications(getAuthHeaders(), 20);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderNotifications(data);
+    refreshUnreadNotifications();
+  } catch (err) {
+    console.warn("Không tải được thông báo:", err);
+    notificationList.innerHTML = '<div class="notification-empty">Chưa tải được thông báo.</div>';
+  }
 }
 
 async function authRequest(endpoint) {
@@ -868,6 +1013,7 @@ async function toggleShelfSmart(bookId, chapterNumber = 1) {
 
       await addRemoteBookmark(id, chapterNumber);
       saveToShelf(id);
+      refreshUnreadNotifications();
       return true;
     } catch (err) {
       console.warn("Bookmark API lá»—i, fallback localStorage:", err);
@@ -883,6 +1029,8 @@ function logoutUser(e) {
   if (e) e.preventDefault();
 
   clearAuthToken();
+  closeNotifications();
+  renderNotificationBadge(0);
   updateAuthUI();
 
   if (currentBook) {
@@ -3057,6 +3205,60 @@ function bindEvents() {
     logoutLink.addEventListener("click", logoutUser);
   }
 
+  if (notificationBell) {
+    notificationBell.addEventListener("click", toggleNotifications);
+  }
+
+  if (notificationMarkAllBtn) {
+    notificationMarkAllBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      if (!isLoggedIn()) return;
+
+      try {
+        const res = await markAllNotificationsRead(getAuthHeaders());
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await loadNotifications();
+        renderNotificationBadge(0);
+      } catch (err) {
+        console.warn("Không đánh dấu đã đọc được thông báo:", err);
+      }
+    });
+  }
+
+  if (notificationList) {
+    notificationList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-notification-id]");
+      if (!btn) return;
+
+      e.preventDefault();
+      const notificationId = btn.dataset.notificationId;
+      const target = btn.dataset.notificationTarget || "";
+
+      try {
+        const res = await markNotificationRead(notificationId, getAuthHeaders());
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        btn.classList.remove("unread");
+        refreshUnreadNotifications();
+      } catch (err) {
+        console.warn("Không đánh dấu thông báo đã đọc:", err);
+      }
+
+      if (target) {
+        closeNotifications();
+        window.history.pushState(null, "", target);
+        await handleRoute();
+      }
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    const target = e.target;
+    if (!(target instanceof Element)) return;
+    if (!target.closest(".notification-wrap")) {
+      closeNotifications();
+    }
+  });
+
   if (authCloseBtn) {
     authCloseBtn.addEventListener("click", closeAuthModal);
   }
@@ -3526,6 +3728,11 @@ function initDomRefs() {
   rankingList = $("rankingList");
   loginLink = $("loginLink");
   logoutLink = $("logoutLink");
+  notificationBell = $("notificationBell");
+  notificationBadge = $("notificationBadge");
+  notificationDropdown = $("notificationDropdown");
+  notificationList = $("notificationList");
+  notificationMarkAllBtn = $("notificationMarkAllBtn");
   authModal = $("authModal");
   authCloseBtn = $("authCloseBtn");
   authEmail = $("authEmail");

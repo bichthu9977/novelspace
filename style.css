@@ -307,6 +307,136 @@ img {
   transform: translateY(-1px);
 }
 
+.notification-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notification-wrap.hidden,
+.notification-dropdown.hidden,
+.notification-badge.hidden {
+  display: none !important;
+}
+
+.notification-bell {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.notification-bell:hover {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f2c94c;
+  color: #3b1f18;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(360px, 88vw);
+  max-height: 460px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  overflow: hidden;
+  z-index: 200;
+}
+
+.notification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-head button {
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.notification-list {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.notification-item {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.notification-item:hover,
+.notification-item.unread {
+  background: var(--surface);
+}
+
+.notification-item.unread .notification-item-title::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.notification-item-title {
+  font-weight: 700;
+}
+
+.notification-item-message,
+.notification-item-time,
+.notification-empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.notification-empty {
+  padding: 16px 14px;
+}
+
 .mobile-nav-group,
 .mobile-nav-parent,
 .mobile-submenu,

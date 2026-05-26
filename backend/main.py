@@ -21,7 +21,7 @@ from schemas import UserCreate, UserLogin, TokenResponse, BookmarkCreate
 from models import ReadingProgress
 from schemas import ReadingProgressCreate
 from sqlalchemy import func, desc
-from models import Comment
+from models import Comment, Notification
 from schemas import CommentCreate
 
 from database import engine, get_db
@@ -53,6 +53,7 @@ from schemas import (
     ChapterCreate,
     BookUpdate,
     ChapterUpdate,
+    NotificationResponse,
 )
 
 Base.metadata.create_all(bind=engine)
@@ -311,6 +312,76 @@ def query_recently_updated_books(db: Session, page: int, limit: int):
     ).offset(offset).limit(safe_limit).all()
 
 
+def create_notification(
+    db: Session,
+    user_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+    payload: dict | None = None,
+):
+    notification = Notification(
+        user_id=user_id,
+        type=notification_type,
+        title=title,
+        message=message,
+        payload=payload or {},
+    )
+    db.add(notification)
+    return notification
+
+
+def notify_bookmark_users_about_new_chapter(db: Session, book: Book, chapter: Chapter):
+    user_ids = [
+        user_id for (user_id,) in db.query(Bookmark.user_id)
+        .filter(Bookmark.book_id == book.id)
+        .distinct()
+        .all()
+    ]
+
+    for user_id in user_ids:
+        create_notification(
+            db,
+            user_id=user_id,
+            notification_type="new_chapter",
+            title="Truyện bạn lưu có chương mới",
+            message=f"{book.title or 'Truyện'} vừa cập nhật chương {chapter.chapter_number}.",
+            payload={
+                "book_id": book.id,
+                "book_title": book.title,
+                "chapter_number": chapter.chapter_number,
+                "seo_url": book.seo_url or f"book-{book.id}",
+            },
+        )
+
+
+def notify_comment_participants(db: Session, book: Book, comment: Comment, current_user: User):
+    user_ids = [
+        user_id for (user_id,) in db.query(Comment.user_id)
+        .filter(
+            Comment.book_id == book.id,
+            Comment.user_id != current_user.id,
+        )
+        .distinct()
+        .all()
+    ]
+
+    for user_id in user_ids:
+        create_notification(
+            db,
+            user_id=user_id,
+            notification_type="comment_reply",
+            title="Có bình luận mới",
+            message=f"{current_user.email} vừa bình luận trong {book.title or 'truyện bạn theo dõi'}.",
+            payload={
+                "book_id": book.id,
+                "book_title": book.title,
+                "comment_id": comment.id,
+                "seo_url": book.seo_url or f"book-{book.id}",
+            },
+        )
+
+
 @app.get("/")
 def home():
     return {"message": "TruyenFullvn API is running"}
@@ -490,6 +561,7 @@ def create_chapter(
     db.add(chapter)
 
     book.chapter_count += 1
+    notify_bookmark_users_about_new_chapter(db, book, chapter)
 
     db.commit()
     db.refresh(chapter)
@@ -651,6 +723,71 @@ def me(current_user: User = Depends(get_current_user)):
     }
 
 
+@app.get("/api/notifications", response_model=list[NotificationResponse])
+def get_notifications(
+    limit: int = 20,
+    unread_only: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    safe_limit = min(max(int(limit or 20), 1), 100)
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+
+    if unread_only:
+        query = query.filter(Notification.read_at.is_(None))
+
+    return query.order_by(Notification.created_at.desc(), Notification.id.desc()).limit(safe_limit).all()
+
+
+@app.get("/api/notifications/unread-count")
+def get_notifications_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    count = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.read_at.is_(None),
+    ).count()
+
+    return {"unread": count}
+
+
+@app.post("/api/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id,
+    ).first()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    if not notification.read_at:
+        notification.read_at = datetime.utcnow()
+        db.commit()
+
+    return {"message": "Notification marked as read", "id": notification_id}
+
+
+@app.post("/api/notifications/read-all")
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    updated = db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.read_at.is_(None),
+    ).update({Notification.read_at: datetime.utcnow()}, synchronize_session=False)
+
+    db.commit()
+
+    return {"message": "Notifications marked as read", "updated": updated}
+
+
 @app.post("/api/bookmarks")
 @limiter.limit(BOOKMARK_RATE_LIMIT)
 def add_bookmark(
@@ -671,6 +808,19 @@ def add_bookmark(
 
     if old:
         old.chapter_number = bookmark_data.chapter_number
+        create_notification(
+            db,
+            user_id=current_user.id,
+            notification_type="bookmark_update",
+            title="Tủ sách đã cập nhật",
+            message=f"Đã cập nhật vị trí đọc của {book.title or 'truyện'} đến chương {bookmark_data.chapter_number}.",
+            payload={
+                "book_id": book.id,
+                "book_title": book.title,
+                "chapter_number": bookmark_data.chapter_number,
+                "seo_url": book.seo_url or f"book-{book.id}",
+            },
+        )
         db.commit()
         return {"message": "Bookmark updated"}
 
@@ -681,6 +831,19 @@ def add_bookmark(
     )
 
     db.add(bookmark)
+    create_notification(
+        db,
+        user_id=current_user.id,
+        notification_type="bookmark_update",
+        title="Đã lưu truyện",
+        message=f"{book.title or 'Truyện'} đã được thêm vào tủ sách.",
+        payload={
+            "book_id": book.id,
+            "book_title": book.title,
+            "chapter_number": bookmark_data.chapter_number,
+            "seo_url": book.seo_url or f"book-{book.id}",
+        },
+    )
     db.commit()
 
     return {"message": "Bookmark added"}
@@ -825,6 +988,8 @@ def create_book_comment(
     )
 
     db.add(comment)
+    db.flush()
+    notify_comment_participants(db, book, comment, current_user)
     db.commit()
     db.refresh(comment)
 
@@ -989,11 +1154,12 @@ def admin_delete_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    deleted = {"comments": 0, "bookmarks": 0, "progress": 0, "user": user_id}
+    deleted = {"comments": 0, "bookmarks": 0, "progress": 0, "notifications": 0, "user": user_id}
 
     comments = db.query(Comment).filter(Comment.user_id == user_id).all()
     bookmarks = db.query(Bookmark).filter(Bookmark.user_id == user_id).all()
     progress_items = db.query(ReadingProgress).filter(ReadingProgress.user_id == user_id).all()
+    notifications = db.query(Notification).filter(Notification.user_id == user_id).all()
 
     if delete_content:
         deleted["comments"] = len(comments)
@@ -1007,6 +1173,10 @@ def admin_delete_user(
         deleted["progress"] = len(progress_items)
         for item in progress_items:
             db.delete(item)
+
+    deleted["notifications"] = len(notifications)
+    for item in notifications:
+        db.delete(item)
 
     db.delete(user)
     db.commit()
@@ -1213,6 +1383,24 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
       <nav class="nav" id="mainNav">
         <a href="/" id="homeLink">Trang chủ</a>
         <a href="#" id="shelfLink">Tủ sách</a>
+        <div class="notification-wrap hidden">
+          <button id="notificationBell" class="notification-bell" type="button" aria-label="Thông báo" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+            </svg>
+            <span id="notificationBadge" class="notification-badge hidden">0</span>
+          </button>
+          <div id="notificationDropdown" class="notification-dropdown hidden" aria-hidden="true">
+            <div class="notification-head">
+              <strong>Thông báo</strong>
+              <button id="notificationMarkAllBtn" type="button">Đã đọc hết</button>
+            </div>
+            <div id="notificationList" class="notification-list">
+              <div class="notification-empty">Đăng nhập để xem thông báo.</div>
+            </div>
+          </div>
+        </div>
         <a href="#" id="loginLink">Đăng nhập</a>
         <a href="#" id="logoutLink" class="hidden">Đăng xuất</a>
       </nav>

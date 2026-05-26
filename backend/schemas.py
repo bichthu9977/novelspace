@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import datetime
 
 
 class ChapterResponse(BaseModel):
@@ -111,3 +112,17 @@ class ReadingProgressCreate(BaseModel):
 class CommentCreate(BaseModel):
     book_id: int
     content: str
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    title: str
+    message: str
+    payload: dict = {}
+    read_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

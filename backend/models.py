@@ -76,3 +76,15 @@ class Comment(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    type = Column(String, index=True)
+    title = Column(String, default="")
+    message = Column(Text, default="")
+    payload = Column(JSON, default={})
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
