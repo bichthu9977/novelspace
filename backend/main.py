@@ -59,6 +59,15 @@ BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIR = BACKEND_DIR.parent
 
 SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000").rstrip("/")
+LEGACY_AUDIO_BASE_URL = "https://audio.truyenfullvn.org/"
+AUDIO_BASE_URL = "https://audio.novel-space.com/"
+
+
+def normalize_audio_url(url: str) -> str:
+    if not url:
+        return ""
+
+    return str(url).strip().replace(LEGACY_AUDIO_BASE_URL, AUDIO_BASE_URL)
 
 if (FRONTEND_DIR / "images").exists():
     app.mount("/images", StaticFiles(directory=str(FRONTEND_DIR / "images")), name="images")
@@ -861,7 +870,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
     canonical = f"{SITE_URL}{_make_chapter_url(book, chapter_number)}"
     prev_url = _make_chapter_url(book, chapter_number - 1) if chapter_number > 1 else ""
     next_url = _make_chapter_url(book, chapter_number + 1) if chapter_number < total_chapters else ""
-    audio_url = getattr(chapter, "audio_url", "") or ""
+    audio_url = normalize_audio_url(getattr(chapter, "audio_url", "") or "")
     content_html = _chapter_content_html(chapter.content)
     tags_html = _book_tags_html(book.tags)
 

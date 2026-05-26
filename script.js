@@ -30,9 +30,16 @@ const API_BASE_URL =
   window.location.hostname === "www.truyenfullvn.org"
     ? "https://api.truyenfullvn.org"
     : "http://127.0.0.1:8000";
+const LEGACY_AUDIO_BASE_URL = "https://audio.truyenfullvn.org/";
+const AUDIO_BASE_URL = "https://audio.novel-space.com/";
 
 function apiUrl(path) {
   return `${API_BASE_URL}${path}`;
+}
+
+function normalizeAudioUrl(url) {
+  if (typeof url !== "string") return "";
+  return url.trim().replace(LEGACY_AUDIO_BASE_URL, AUDIO_BASE_URL);
 }
 
 
@@ -387,7 +394,7 @@ function normalizeBook(fullBook, fallback = {}) {
               .map((p) => String(p ?? "").trim())
               .filter((p) => p !== "")
           : [],
-        audio: chapter?.audio || chapter?.audioUrl || chapter?.audio_url || "",
+        audio: normalizeAudioUrl(chapter?.audio || chapter?.audioUrl || chapter?.audio_url || ""),
         video: chapter?.video || chapter?.videoUrl || chapter?.video_url || ""
       }))
     : [];
@@ -2009,7 +2016,10 @@ function getChapterMediaUrl(chapter, type = "audio") {
 
   for (const key of keys) {
     const value = chapter[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "string" && value.trim()) {
+      const trimmed = value.trim();
+      return type === "audio" ? normalizeAudioUrl(trimmed) : trimmed;
+    }
   }
 
   return "";
@@ -3641,4 +3651,3 @@ window.addEventListener("load", () => {
     }
   }, 300);
 });
-

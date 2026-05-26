@@ -7,6 +7,8 @@ from models import Book, Chapter, Base
 from database import engine
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+LEGACY_AUDIO_BASE_URL = "https://audio.truyenfullvn.org/"
+AUDIO_BASE_URL = "https://audio.novel-space.com/"
 
 INDEX_FILES = [
     "books-index.json",
@@ -37,6 +39,13 @@ def chapter_number_from_title(title: str, fallback: int) -> int:
         return int(match.group())
 
     return fallback
+
+
+def normalize_audio_url(url: str) -> str:
+    if not url:
+        return ""
+
+    return str(url).strip().replace(LEGACY_AUDIO_BASE_URL, AUDIO_BASE_URL)
 
 
 def import_books():
@@ -115,7 +124,9 @@ def import_books():
                             chapter_number=chapter_number,
                             title=title,
                             content=ch.get("content", []),
-                            audio_url=ch.get("audio", "") or ch.get("audio_url", "") or ch.get("audioUrl", ""),
+                            audio_url=normalize_audio_url(
+                                ch.get("audio", "") or ch.get("audio_url", "") or ch.get("audioUrl", "")
+                            ),
                         )
 
                         db.add(chapter)
