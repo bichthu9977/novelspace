@@ -75,6 +75,9 @@ if (FRONTEND_DIR / "images").exists():
 if (FRONTEND_DIR / "data").exists():
     app.mount("/data", StaticFiles(directory=str(FRONTEND_DIR / "data")), name="data")
 
+if (FRONTEND_DIR / "frontend").exists():
+    app.mount("/frontend", StaticFiles(directory=str(FRONTEND_DIR / "frontend")), name="frontend")
+
 
 @app.get("/script.js", include_in_schema=False)
 def serve_frontend_script():
