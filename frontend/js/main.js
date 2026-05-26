@@ -29,7 +29,11 @@ import {
   getCommentUserLabel as getRenderedCommentUserLabel,
   postBookComment
 } from "./comments.js";
-import { fetchTrendingBooks, shuffleArray as shuffleRelatedArray } from "./related.js";
+import {
+  fetchRecentlyUpdatedBooks,
+  fetchTrendingBooks,
+  shuffleArray as shuffleRelatedArray
+} from "./related.js";
 import { setupChapterAudioPlayer as setupAudioPlayer } from "./audio.js";
 
 let books = [];
@@ -154,6 +158,12 @@ let commentsList;
 let relatedBooksSection;
 let relatedBooksGrid;
 let relatedMoreBtn;
+let recentUpdatedSection;
+let recentUpdatedGrid;
+let recentUpdatedMoreBtn;
+let recentUpdatedPage = 1;
+let recentUpdatedItems = [];
+let recentUpdatedHasMore = true;
 
 function isMobileView() {
   return window.innerWidth <= 640;
@@ -1167,6 +1177,91 @@ function refreshContinueReadingPanel() {
     });
 }
 
+
+
+function renderRecentlyUpdatedBooks() {
+  if (!recentUpdatedSection || !recentUpdatedGrid) return;
+
+  recentUpdatedSection.classList.toggle("hidden", recentUpdatedItems.length === 0);
+
+  if (!recentUpdatedItems.length) {
+    recentUpdatedGrid.innerHTML = '<div class="empty-state">Đang tải truyện mới cập nhật...</div>';
+    return;
+  }
+
+  recentUpdatedGrid.innerHTML = recentUpdatedItems.map((book) => `
+    <button class="recent-updated-card" type="button" data-recent-book="${escapeHtml(book.id)}">
+      <img src="${escapeHtml(assetUrl(book.cover || "images/default.jpg"))}" alt="Bìa ${escapeHtml(book.title || "")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/default.jpg'" />
+      <span class="recent-updated-info">
+        <strong>${escapeHtml(book.title || "Không có tên")}</strong>
+        <small>${escapeHtml(book.author || "Chưa rõ")}</small>
+        <span>${getBookChapterCount(book)} chương</span>
+      </span>
+    </button>
+  `).join("");
+
+  if (recentUpdatedMoreBtn) {
+    recentUpdatedMoreBtn.classList.toggle("hidden", !recentUpdatedHasMore);
+    recentUpdatedMoreBtn.disabled = !recentUpdatedHasMore;
+  }
+}
+
+async function loadRecentlyUpdatedBooks(reset = false) {
+  if (!recentUpdatedSection || !recentUpdatedGrid) return;
+
+  if (reset) {
+    recentUpdatedPage = 1;
+    recentUpdatedItems = [];
+    recentUpdatedHasMore = true;
+    recentUpdatedGrid.innerHTML = '<div class="empty-state">Đang tải truyện mới cập nhật...</div>';
+  }
+
+  if (!recentUpdatedHasMore) return;
+
+  try {
+    const limit = 12;
+    const res = await fetchRecentlyUpdatedBooks(recentUpdatedPage, limit);
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error("Recently updated response is not an array");
+    }
+
+    const items = data.map((book, index) => normalizeBook(
+      {
+        ...book,
+        chapterCount: book.chapter_count,
+        seoUrl: book.seo_url,
+        chapters: []
+      },
+      { id: Number(book?.id ?? index + 1) }
+    ));
+
+    const existing = new Set(recentUpdatedItems.map((book) => Number(book.id)));
+    recentUpdatedItems = [
+      ...recentUpdatedItems,
+      ...items.filter((book) => !existing.has(Number(book.id)))
+    ];
+    recentUpdatedHasMore = data.length === limit;
+    recentUpdatedPage += 1;
+    renderRecentlyUpdatedBooks();
+  } catch (err) {
+    console.warn("Không tải được truyện mới cập nhật:", err);
+
+    if (!recentUpdatedItems.length && Array.isArray(books) && books.length) {
+      recentUpdatedItems = [...books]
+        .sort((a, b) => Number(b.id || 0) - Number(a.id || 0))
+        .slice(0, 12);
+      recentUpdatedHasMore = false;
+      renderRecentlyUpdatedBooks();
+    }
+  }
+}
 
 
 let relatedBooksVisibleCount = 4;
@@ -2868,6 +2963,7 @@ async function loadBooks() {
     appReady = true;
     renderContinueReadingPanel();
     renderBooks();
+    await loadRecentlyUpdatedBooks(true);
     await openRouteFromCurrentUrl();
     await hydrateServerRenderedChapter();
   } catch (error) {
@@ -2924,6 +3020,23 @@ function bindEvents() {
 
       e.preventDefault();
       goToBook(btn.dataset.relatedBook, 0);
+    });
+  }
+
+  if (recentUpdatedMoreBtn) {
+    recentUpdatedMoreBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      loadRecentlyUpdatedBooks(false);
+    });
+  }
+
+  if (recentUpdatedGrid) {
+    recentUpdatedGrid.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-recent-book]");
+      if (!btn) return;
+
+      e.preventDefault();
+      goToBook(btn.dataset.recentBook, 0);
     });
   }
 
@@ -3443,6 +3556,9 @@ function initDomRefs() {
   relatedBooksSection = $("relatedBooksSection");
   relatedBooksGrid = $("relatedBooksGrid");
   relatedMoreBtn = $("relatedMoreBtn");
+  recentUpdatedSection = $("recentUpdatedSection");
+  recentUpdatedGrid = $("recentUpdatedGrid");
+  recentUpdatedMoreBtn = $("recentUpdatedMoreBtn");
 
   shelfLink = $("shelfLink") || document.querySelector('.nav a:nth-child(4)');
   booksPanelTitle = $("booksPanelTitle");

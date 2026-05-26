@@ -29,6 +29,7 @@ from schemas import BookCreate, ChapterCreate
 from models import Base, Book, Chapter
 from cache import (
     CACHE_HOMEPAGE_TTL,
+    CACHE_RECENT_TTL,
     CACHE_RELATED_TTL,
     CACHE_SEARCH_TTL,
     CACHE_TRENDING_TTL,
@@ -290,6 +291,26 @@ def query_related_books(db: Session, book: Book, limit: int):
     return candidates[:limit]
 
 
+def query_recently_updated_books(db: Session, page: int, limit: int):
+    safe_page = max(int(page or 1), 1)
+    safe_limit = min(max(int(limit or 12), 1), 50)
+    offset = (safe_page - 1) * safe_limit
+
+    latest_chapters = db.query(
+        Chapter.book_id.label("book_id"),
+        func.max(Chapter.created_at).label("latest_chapter_at"),
+    ).group_by(Chapter.book_id).subquery()
+
+    return db.query(Book).outerjoin(
+        latest_chapters,
+        Book.id == latest_chapters.c.book_id,
+    ).order_by(
+        latest_chapters.c.latest_chapter_at.desc().nullslast(),
+        Book.created_at.desc(),
+        Book.id.desc(),
+    ).offset(offset).limit(safe_limit).all()
+
+
 @app.get("/")
 def home():
     return {"message": "TruyenFullvn API is running"}
@@ -334,6 +355,23 @@ def get_trending_books(limit: int = 20, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/api/recently-updated", response_model=list[BookResponse])
+def get_recently_updated_books(
+    page: int = 1,
+    limit: int = 12,
+    db: Session = Depends(get_db)
+):
+    safe_page = max(int(page or 1), 1)
+    safe_limit = min(max(int(limit or 12), 1), 50)
+    cache_key = make_cache_key("recent", page=safe_page, limit=safe_limit)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_RECENT_TTL,
+        lambda: serialize_books(query_recently_updated_books(db, safe_page, safe_limit)),
+    )
+
+
 @app.get("/api/books/{book_id}/related", response_model=list[BookResponse])
 def get_related_books(book_id: int, limit: int = 12, db: Session = Depends(get_db)):
     book = db.query(Book).filter(Book.id == book_id).first()
@@ -352,7 +390,7 @@ def get_related_books(book_id: int, limit: int = 12, db: Session = Depends(get_d
 
 @app.get("/api/homepage")
 def get_homepage_data(db: Session = Depends(get_db)):
-    cache_key = make_cache_key("homepage", version=1)
+    cache_key = make_cache_key("homepage", version=2)
 
     return get_or_set_json(
         cache_key,
@@ -360,6 +398,7 @@ def get_homepage_data(db: Session = Depends(get_db)):
         lambda: {
             "trending": serialize_books(query_ranked_books(db, 20)),
             "ranking": serialize_books(query_ranked_books(db, 10)),
+            "recently_updated": serialize_books(query_recently_updated_books(db, 1, 12)),
         },
     )
 
@@ -1187,6 +1226,16 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
           <div class="books-grid" id="booksGrid"></div>
           <div class="pagination" id="pagination"></div>
         </div>
+        <section class="panel recent-updated-panel" id="recentUpdatedSection" aria-labelledby="recentUpdatedTitle">
+          <div class="recent-updated-head">
+            <div>
+              <h2 class="section-title section-title-main" id="recentUpdatedTitle">Truyện mới cập nhật</h2>
+              <p>Những truyện vừa có chương mới, sắp xếp theo lần cập nhật gần nhất.</p>
+            </div>
+            <button class="ghost-btn" id="recentUpdatedMoreBtn" type="button">Xem thêm</button>
+          </div>
+          <div class="recent-updated-scroll" id="recentUpdatedGrid"></div>
+        </section>
       </section>
     </section>
     <section id="readerView" class="reader-shell active">

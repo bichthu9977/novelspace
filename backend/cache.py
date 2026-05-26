@@ -24,6 +24,7 @@ CACHE_TRENDING_TTL = int(os.getenv("CACHE_TRENDING_TTL", str(CACHE_DEFAULT_TTL))
 CACHE_RELATED_TTL = int(os.getenv("CACHE_RELATED_TTL", str(CACHE_DEFAULT_TTL)))
 CACHE_SEARCH_TTL = int(os.getenv("CACHE_SEARCH_TTL", "120"))
 CACHE_HOMEPAGE_TTL = int(os.getenv("CACHE_HOMEPAGE_TTL", str(CACHE_DEFAULT_TTL)))
+CACHE_RECENT_TTL = int(os.getenv("CACHE_RECENT_TTL", str(CACHE_DEFAULT_TTL)))
 
 _client = None
 
@@ -118,5 +119,5 @@ def delete_group(group: str) -> None:
 
 
 def invalidate_public_book_cache() -> None:
-    for group in ("trending", "related", "search", "homepage"):
+    for group in ("trending", "related", "search", "homepage", "recent"):
         delete_group(group)
