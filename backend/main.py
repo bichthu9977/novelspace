@@ -43,13 +43,10 @@ app = FastAPI(title="TruyenFullvn API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://127.0.0.1:5500",
-        "http://localhost:5500",
-        "http://127.0.0.1:63342",
-        "http://localhost:63342",
         "https://truyenfullvn.org",
         "https://www.truyenfullvn.org",
-        "https://lamtb2306.github.io",
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
     ],
     allow_credentials=True,
     allow_methods=["*"],
