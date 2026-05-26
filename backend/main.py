@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from html import escape
 from pathlib import Path
 from fastapi import Header
@@ -26,6 +27,15 @@ from schemas import CommentCreate
 from database import engine, get_db
 from schemas import BookCreate, ChapterCreate
 from models import Base, Book, Chapter
+from cache import (
+    CACHE_HOMEPAGE_TTL,
+    CACHE_RELATED_TTL,
+    CACHE_SEARCH_TTL,
+    CACHE_TRENDING_TTL,
+    get_or_set_json,
+    invalidate_public_book_cache,
+    make_cache_key,
+)
 from schemas import (
     BookResponse,
     BookDetailResponse,
@@ -37,6 +47,9 @@ from schemas import (
 )
 
 Base.metadata.create_all(bind=engine)
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
+logger = logging.getLogger("truyenfullvn")
 
 app = FastAPI(title="TruyenFullvn API")
 
@@ -155,30 +168,26 @@ def verify_admin_token(x_admin_token: str = Header(None)):
 
     return True
 
-@app.get("/")
-def home():
-    return {"message": "TruyenFullvn API is running"}
+
+def serialize_book(book: Book) -> dict:
+    return BookResponse.model_validate(book).model_dump(mode="json")
 
 
-@app.get("/api/health")
-def health():
-    return {"status": "ok"}
+def serialize_books(books: list[Book]) -> list[dict]:
+    return [serialize_book(book) for book in books]
 
 
-@app.get("/api/search", response_model=list[BookResponse])
-def search_books(
-    q: str = "",
-    limit: int = 50,
-    db: Session = Depends(get_db)
-):
-    keyword = q.strip()
+def query_ranked_books(db: Session, limit: int):
+    return db.query(Book).order_by(
+        Book.views.desc(),
+        Book.popularity.desc(),
+        Book.id.desc()
+    ).limit(limit).all()
 
+
+def query_search_books(db: Session, keyword: str, limit: int):
     if not keyword:
-        return db.query(Book).order_by(
-            Book.views.desc(),
-            Book.popularity.desc(),
-            Book.id.desc()
-        ).limit(limit).all()
+        return query_ranked_books(db, limit)
 
     search_text = func.unaccent(
         func.concat(
@@ -220,6 +229,51 @@ def search_books(
         Book.id.desc()
     ).limit(limit).all()
 
+
+def query_related_books(db: Session, book: Book, limit: int):
+    tags = set(book.tags or [])
+    candidates = query_ranked_books(db, max(limit * 8, 80))
+    candidates = [item for item in candidates if item.id != book.id]
+
+    if tags:
+        candidates.sort(
+            key=lambda item: (
+                len(tags.intersection(set(item.tags or []))),
+                item.views or 0,
+                item.popularity or 0,
+                item.id or 0,
+            ),
+            reverse=True,
+        )
+
+    return candidates[:limit]
+
+
+@app.get("/")
+def home():
+    return {"message": "TruyenFullvn API is running"}
+
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/search", response_model=list[BookResponse])
+def search_books(
+    q: str = "",
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    keyword = q.strip()
+    cache_key = make_cache_key("search", q=keyword, limit=limit)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_SEARCH_TTL,
+        lambda: serialize_books(query_search_books(db, keyword, limit)),
+    )
+
 @app.get("/api/ranking", response_model=list[BookResponse])
 def get_ranking(limit: int = 10, db: Session = Depends(get_db)):
     return db.query(Book).order_by(
@@ -230,11 +284,43 @@ def get_ranking(limit: int = 10, db: Session = Depends(get_db)):
 
 @app.get("/api/trending", response_model=list[BookResponse])
 def get_trending_books(limit: int = 20, db: Session = Depends(get_db)):
-    return db.query(Book).order_by(
-        Book.views.desc(),
-        Book.popularity.desc(),
-        Book.id.desc()
-    ).limit(limit).all()
+    cache_key = make_cache_key("trending", limit=limit)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_TRENDING_TTL,
+        lambda: serialize_books(query_ranked_books(db, limit)),
+    )
+
+
+@app.get("/api/books/{book_id}/related", response_model=list[BookResponse])
+def get_related_books(book_id: int, limit: int = 12, db: Session = Depends(get_db)):
+    book = db.query(Book).filter(Book.id == book_id).first()
+
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    cache_key = make_cache_key("related", book_id=book_id, limit=limit)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_RELATED_TTL,
+        lambda: serialize_books(query_related_books(db, book, limit)),
+    )
+
+
+@app.get("/api/homepage")
+def get_homepage_data(db: Session = Depends(get_db)):
+    cache_key = make_cache_key("homepage", version=1)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_HOMEPAGE_TTL,
+        lambda: {
+            "trending": serialize_books(query_ranked_books(db, 20)),
+            "ranking": serialize_books(query_ranked_books(db, 10)),
+        },
+    )
 
 
 @app.get("/api/books/{book_id}", response_model=BookDetailResponse)
@@ -289,6 +375,7 @@ def create_book(
     db.add(book)
     db.commit()
     db.refresh(book)
+    invalidate_public_book_cache()
 
     return book
 
@@ -326,6 +413,7 @@ def create_chapter(
 
     db.commit()
     db.refresh(chapter)
+    invalidate_public_book_cache()
 
     return chapter
 
@@ -348,6 +436,7 @@ def update_book(
 
     db.commit()
     db.refresh(book)
+    invalidate_public_book_cache()
 
     return book
 
@@ -364,6 +453,7 @@ def delete_book(
 
     db.delete(book)
     db.commit()
+    invalidate_public_book_cache()
 
     return {"message": "Book deleted", "book_id": book_id}
 
@@ -390,6 +480,7 @@ def update_chapter(
 
     db.commit()
     db.refresh(chapter)
+    invalidate_public_book_cache()
 
     return chapter
 
@@ -416,6 +507,7 @@ def delete_chapter(
         book.chapter_count -= 1
 
     db.commit()
+    invalidate_public_book_cache()
 
     return {
         "message": "Chapter deleted",
