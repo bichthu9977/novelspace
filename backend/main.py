@@ -979,6 +979,20 @@ def _safe_text(value, fallback=""):
     return escape(text, quote=True)
 
 
+def _truncate_meta(value, limit=155):
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rsplit(" ", 1)[0].rstrip(".,;:") + "..."
+
+
+def _absolute_asset_url(path):
+    value = str(path or "").strip()
+    if value.startswith(("http://", "https://")):
+        return value
+    return f"{SITE_URL}/{value.lstrip('/') or 'images/default.jpg'}"
+
+
 def _chapter_content_html(content):
     if isinstance(content, list):
         paragraphs = [str(item).strip() for item in content if str(item).strip()]
@@ -1004,22 +1018,65 @@ def _make_chapter_url(book, chapter_number: int):
     return f"/truyen/{seo_url}/chuong-{chapter_number}"
 
 
-def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapters: int):
+def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapters: int, page_kind="chapter"):
     title = book.title or "Không có tên"
     author = book.author or "Chưa rõ"
     chapter_title = chapter.title or f"Chương {chapter_number}"
-    desc = book.desc or f"Đọc truyện {title} chương {chapter_number} online tại TruyenFullvn."
+    book_desc = book.desc or f"Đọc truyện {title} online tại TruyenFullvn."
     cover = book.cover or "images/default.jpg"
-    cover_url = cover if str(cover).startswith("http") else f"{SITE_URL}/{str(cover).lstrip('/')}"
-    canonical = f"{SITE_URL}{_make_chapter_url(book, chapter_number)}"
+    cover_url = _absolute_asset_url(cover)
+    book_url = f"/truyen/{book.seo_url or f'book-{book.id}'}"
+    chapter_url = _make_chapter_url(book, chapter_number)
+    canonical_path = book_url if page_kind == "book" else chapter_url
+    canonical = f"{SITE_URL}{canonical_path}"
     prev_url = _make_chapter_url(book, chapter_number - 1) if chapter_number > 1 else ""
     next_url = _make_chapter_url(book, chapter_number + 1) if chapter_number < total_chapters else ""
     audio_url = normalize_audio_url(getattr(chapter, "audio_url", "") or "")
     content_html = _chapter_content_html(chapter.content)
     tags_html = _book_tags_html(book.tags)
+    tags = book.tags if isinstance(book.tags, list) else []
+    tags_text = ", ".join(str(tag) for tag in tags[:8])
+
+    if page_kind == "book":
+        meta_title = f"{title} - Đọc truyện online | TruyenFullvn"
+        meta_description = _truncate_meta(
+            book_desc or f"Đọc truyện {title} của {author} online, cập nhật nhanh tại TruyenFullvn."
+        )
+        og_type = "book"
+        structured_data = {
+            "@context": "https://schema.org",
+            "@type": "Book",
+            "name": title,
+            "description": meta_description,
+            "author": {"@type": "Person", "name": author},
+            "image": cover_url,
+            "url": canonical,
+            "inLanguage": "vi",
+            "numberOfPages": int(total_chapters or 0),
+        }
+    else:
+        meta_title = f"{title} - {chapter_title} | TruyenFullvn"
+        meta_description = _truncate_meta(
+            f"{book_desc} Đọc {chapter_title} của truyện {title} online tại TruyenFullvn."
+        )
+        og_type = "article"
+        structured_data = {
+            "@context": "https://schema.org",
+            "@type": "Chapter",
+            "name": f"{title} - {chapter_title}",
+            "isPartOf": {
+                "@type": "Book",
+                "name": title,
+                "author": {"@type": "Person", "name": author},
+                "url": f"{SITE_URL}{book_url}",
+            },
+            "position": int(chapter_number),
+            "url": canonical,
+            "inLanguage": "vi",
+        }
 
     page_data = {
-        "mode": "chapter",
+        "mode": page_kind,
         "bookId": int(book.id),
         "chapterNumber": int(chapter_number),
         "seoUrl": book.seo_url or f"book-{book.id}",
@@ -1076,36 +1133,26 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
         '<button class="solid-btn" id="nextChapterBtn" type="button" disabled>Chương tiếp →</button>'
     )
 
-    structured_data = {
-        "@context": "https://schema.org",
-        "@type": "Chapter",
-        "name": f"{title} - {chapter_title}",
-        "isPartOf": {
-            "@type": "Book",
-            "name": title,
-            "author": {"@type": "Person", "name": author}
-        },
-        "url": canonical,
-        "inLanguage": "vi"
-    }
-
     return f"""<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{_safe_text(title)} - {_safe_text(chapter_title)} | TruyenFullvn</title>
-  <meta name="description" content="{_safe_text(desc[:155])}" />
+  <title>{_safe_text(meta_title)}</title>
+  <meta name="description" content="{_safe_text(meta_description)}" />
+  <meta name="keywords" content="{_safe_text(tags_text)}" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="{_safe_text(canonical)}" />
-  <meta property="og:title" content="{_safe_text(title)} - {_safe_text(chapter_title)} | TruyenFullvn" />
-  <meta property="og:description" content="{_safe_text(desc[:200])}" />
-  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="TruyenFullvn" />
+  <meta property="og:title" content="{_safe_text(meta_title)}" />
+  <meta property="og:description" content="{_safe_text(meta_description)}" />
+  <meta property="og:type" content="{_safe_text(og_type)}" />
   <meta property="og:url" content="{_safe_text(canonical)}" />
   <meta property="og:image" content="{_safe_text(cover_url)}" />
+  <meta property="og:locale" content="vi_VN" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="{_safe_text(title)} - {_safe_text(chapter_title)} | TruyenFullvn" />
-  <meta name="twitter:description" content="{_safe_text(desc[:200])}" />
+  <meta name="twitter:title" content="{_safe_text(meta_title)}" />
+  <meta name="twitter:description" content="{_safe_text(meta_description)}" />
   <meta name="twitter:image" content="{_safe_text(cover_url)}" />
   <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/style.css" />
@@ -1156,7 +1203,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
           <div class="reader-book-info">
             <div class="reader-book-author" id="readerAuthor">Tác giả: {_safe_text(author)}</div>
             <div class="reader-book-tags" id="readerTags">{tags_html}</div>
-            <div class="reader-book-desc" id="readerDesc">{_safe_text(desc)}</div>
+            <div class="reader-book-desc" id="readerDesc">{_safe_text(book_desc)}</div>
           </div>
         </div>
         <div class="reader-controls">
@@ -1255,7 +1302,7 @@ def _find_book_by_seo_url(db: Session, seo_url: str):
     return book
 
 
-def _render_chapter_page_response(book, chapter_number: int, db: Session):
+def _render_chapter_page_response(book, chapter_number: int, db: Session, page_kind="chapter"):
     chapter = db.query(Chapter).filter(
         Chapter.book_id == book.id,
         Chapter.chapter_number == chapter_number
@@ -1265,7 +1312,7 @@ def _render_chapter_page_response(book, chapter_number: int, db: Session):
         raise HTTPException(status_code=404, detail="Chapter not found")
 
     total_chapters = book.chapter_count or db.query(Chapter).filter(Chapter.book_id == book.id).count()
-    html = _render_hybrid_chapter_html(book, chapter, chapter_number, total_chapters)
+    html = _render_hybrid_chapter_html(book, chapter, chapter_number, total_chapters, page_kind=page_kind)
     return HTMLResponse(content=html)
 
 
@@ -1288,4 +1335,4 @@ def read_book_page(seo_url: str, db: Session = Depends(get_db)):
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 
-    return _render_chapter_page_response(book, 1, db)
+    return _render_chapter_page_response(book, 1, db, page_kind="book")
