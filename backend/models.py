@@ -88,3 +88,13 @@ class Notification(Base):
     payload = Column(JSON, default={})
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class AnalyticsVisit(Base):
+    __tablename__ = "analytics_visits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    path = Column(String, index=True)
+    user_agent = Column(String, default="")
+    ip = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TruyenFullvn Admin - Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f1ea;
+      --card: #fff;
+      --surface: #faf6f1;
+      --primary: #8a3d2f;
+      --primary-dark: #6d2d22;
+      --text: #2d2d2d;
+      --muted: #777;
+      --border: #e7ddd2;
+      --danger: #b3261e;
+      --success: #188038;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 18px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+    }
+
+    h1, h2 {
+      color: var(--primary-dark);
+      margin: 0 0 10px;
+    }
+
+    .muted { color: var(--muted); }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) 150px auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    input, select, button { font: inherit; }
+
+    input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: var(--surface);
+      outline: none;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-light {
+      background: #fff5ee;
+      color: var(--primary-dark);
+      border: 1px solid #f0d7c5;
+    }
+
+    .status {
+      min-height: 22px;
+      color: var(--muted);
+    }
+
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--success); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--primary-dark);
+      font-size: 26px;
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr;
+      gap: 18px;
+    }
+
+    .chart-box {
+      min-height: 320px;
+    }
+
+    canvas {
+      width: 100% !important;
+      max-height: 340px;
+    }
+
+    .table-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--primary-dark);
+      font-weight: 700;
+    }
+
+    .number {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      .summary-grid,
+      .chart-grid,
+      .table-grid,
+      .toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .wrap {
+        padding: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel">
+      <h1>Analytics dashboard</h1>
+      <p class="muted">Xem visits, sách/chương nổi bật, đăng ký user và thống kê comment.</p>
+
+      <div class="toolbar">
+        <input id="adminToken" type="password" placeholder="Nhập ADMIN_TOKEN" />
+        <select id="daysSelect">
+          <option value="7">7 ngày</option>
+          <option value="14" selected>14 ngày</option>
+          <option value="30">30 ngày</option>
+          <option value="90">90 ngày</option>
+        </select>
+        <button id="saveTokenBtn" class="btn-light" type="button">Lưu token</button>
+        <button id="loadBtn" class="btn" type="button">Tải analytics</button>
+      </div>
+
+      <p id="status" class="status"></p>
+    </section>
+
+    <section class="summary-grid" id="summaryGrid"></section>
+
+    <section class="chart-grid">
+      <div class="panel chart-box">
+        <h2>Daily visits</h2>
+        <canvas id="visitsChart"></canvas>
+      </div>
+      <div class="panel chart-box">
+        <h2>User registrations & comments</h2>
+        <canvas id="activityChart"></canvas>
+      </div>
+    </section>
+
+    <section class="chart-grid">
+      <div class="panel chart-box">
+        <h2>Top books</h2>
+        <canvas id="booksChart"></canvas>
+      </div>
+      <div class="panel chart-box">
+        <h2>Top chapters</h2>
+        <canvas id="chaptersChart"></canvas>
+      </div>
+    </section>
+
+    <section class="table-grid">
+      <div class="panel">
+        <h2>Top books</h2>
+        <div id="topBooksTable" class="muted">Chưa tải dữ liệu.</div>
+      </div>
+      <div class="panel">
+        <h2>Comment stats</h2>
+        <div id="commentStats" class="muted">Chưa tải dữ liệu.</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE_URL =
+      location.hostname === "truyenfullvn.org" || location.hostname === "www.truyenfullvn.org"
+        ? "https://api.truyenfullvn.org"
+        : "http://127.0.0.1:8000";
+
+    const tokenInput = document.getElementById("adminToken");
+    const daysSelect = document.getElementById("daysSelect");
+    const saveTokenBtn = document.getElementById("saveTokenBtn");
+    const loadBtn = document.getElementById("loadBtn");
+    const statusEl = document.getElementById("status");
+    const summaryGrid = document.getElementById("summaryGrid");
+    const topBooksTable = document.getElementById("topBooksTable");
+    const commentStats = document.getElementById("commentStats");
+    const charts = {};
+
+    tokenInput.value = localStorage.getItem("truyenfullvnAdminToken") || "";
+
+    function setStatus(message, type = "") {
+      statusEl.textContent = message || "";
+      statusEl.className = "status";
+      if (type) statusEl.classList.add(type);
+    }
+
+    function getAdminToken() {
+      return tokenInput.value.trim();
+    }
+
+    function escapeHtml(text) {
+      return String(text ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function formatNumber(value) {
+      return Number(value || 0).toLocaleString("vi-VN");
+    }
+
+    async function apiFetch(path) {
+      const token = getAdminToken();
+      if (!token) throw new Error("Bạn cần nhập ADMIN_TOKEN.");
+
+      const res = await fetch(`${API_BASE_URL}${path}`, {
+        headers: { "X-Admin-Token": token },
+        cache: "no-store"
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      return data;
+    }
+
+    function renderSummary(summary) {
+      const items = [
+        ["Visits", summary.total_visits],
+        ["Books", summary.total_books],
+        ["Chapters", summary.total_chapters],
+        ["Users", summary.total_users],
+        ["Comments", summary.total_comments]
+      ];
+
+      summaryGrid.innerHTML = items.map(([label, value]) => `
+        <article class="metric panel">
+          <strong>${formatNumber(value)}</strong>
+          <span>${label}</span>
+        </article>
+      `).join("");
+    }
+
+    function makeChart(id, config) {
+      if (charts[id]) charts[id].destroy();
+      const canvas = document.getElementById(id);
+      if (!window.Chart || !canvas) return;
+      charts[id] = new Chart(canvas, config);
+    }
+
+    function renderCharts(data) {
+      const labels = data.daily.map((item) => item.date.slice(5));
+
+      makeChart("visitsChart", {
+        type: "line",
+        data: {
+          labels,
+          datasets: [{
+            label: "Visits",
+            data: data.daily.map((item) => item.visits),
+            borderColor: "#8a3d2f",
+            backgroundColor: "rgba(138,61,47,.12)",
+            tension: 0.25,
+            fill: true
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      makeChart("activityChart", {
+        type: "bar",
+        data: {
+          labels,
+          datasets: [
+            { label: "Registrations", data: data.daily.map((item) => item.registrations), backgroundColor: "#188038" },
+            { label: "Comments", data: data.daily.map((item) => item.comments), backgroundColor: "#b56a58" }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      makeChart("booksChart", {
+        type: "bar",
+        data: {
+          labels: data.top_books.slice(0, 8).map((book) => book.title),
+          datasets: [{ label: "Views", data: data.top_books.slice(0, 8).map((book) => book.views), backgroundColor: "#8a3d2f" }]
+        },
+        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false }
+      });
+
+      makeChart("chaptersChart", {
+        type: "bar",
+        data: {
+          labels: data.top_chapters.slice(0, 8).map((item) => `#${item.book_id} C${item.chapter_number}`),
+          datasets: [{ label: "Reads", data: data.top_chapters.slice(0, 8).map((item) => item.reads), backgroundColor: "#6d2d22" }]
+        },
+        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false }
+      });
+    }
+
+    function renderTables(data) {
+      if (!data.top_books.length) {
+        topBooksTable.innerHTML = '<div class="muted">Chưa có dữ liệu sách.</div>';
+      } else {
+        topBooksTable.innerHTML = `
+          <table>
+            <thead><tr><th>Sách</th><th>Tác giả</th><th class="number">Views</th></tr></thead>
+            <tbody>
+              ${data.top_books.map((book) => `
+                <tr>
+                  <td>${escapeHtml(book.title)}</td>
+                  <td>${escapeHtml(book.author)}</td>
+                  <td class="number">${formatNumber(book.views)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        `;
+      }
+
+      commentStats.innerHTML = `
+        <table>
+          <tbody>
+            <tr><th>Total comments</th><td class="number">${formatNumber(data.comments.total)}</td></tr>
+            <tr><th>Last 24h</th><td class="number">${formatNumber(data.comments.last_24h)}</td></tr>
+            <tr><th>Last 7 days</th><td class="number">${formatNumber(data.comments.last_7d)}</td></tr>
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function loadAnalytics() {
+      setStatus("Đang tải analytics...");
+      try {
+        const data = await apiFetch(`/api/admin/analytics?days=${encodeURIComponent(daysSelect.value)}`);
+        renderSummary(data.summary || {});
+        renderCharts(data);
+        renderTables(data);
+        setStatus(`Đã tải analytics ${data.range?.days || daysSelect.value} ngày.`, "success");
+      } catch (err) {
+        setStatus(`Lỗi: ${err.message}`, "error");
+      }
+    }
+
+    saveTokenBtn.addEventListener("click", () => {
+      localStorage.setItem("truyenfullvnAdminToken", getAdminToken());
+      setStatus("Đã lưu ADMIN_TOKEN trên máy này.", "success");
+    });
+    loadBtn.addEventListener("click", loadAnalytics);
+    daysSelect.addEventListener("change", loadAnalytics);
+  </script>
+</body>
+</html>

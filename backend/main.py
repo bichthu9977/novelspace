@@ -21,10 +21,10 @@ from schemas import UserCreate, UserLogin, TokenResponse, BookmarkCreate
 from models import ReadingProgress
 from schemas import ReadingProgressCreate
 from sqlalchemy import func, desc
-from models import Comment, Notification
+from models import AnalyticsVisit, Comment, Notification
 from schemas import CommentCreate
 
-from database import engine, get_db
+from database import SessionLocal, engine, get_db
 from schemas import BookCreate, ChapterCreate
 from models import Base, Book, Chapter
 from cache import (
@@ -64,6 +64,73 @@ logger = logging.getLogger("truyenfullvn")
 
 app = FastAPI(title="TruyenFullvn API")
 setup_rate_limiting(app)
+
+
+def should_track_visit(path: str, method: str) -> bool:
+    if method != "GET":
+        return False
+
+    ignored_prefixes = (
+        "/api",
+        "/admin",
+        "/frontend",
+        "/images",
+        "/data",
+        "/static",
+    )
+    ignored_exact = {
+        "/favicon.ico",
+        "/robots.txt",
+        "/sitemap.xml",
+        "/script.js",
+        "/style.css",
+    }
+    ignored_suffixes = (
+        ".css",
+        ".js",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".ico",
+        ".svg",
+        ".webp",
+        ".avif",
+        ".xml",
+    )
+
+    return (
+        path not in ignored_exact
+        and not path.startswith(ignored_prefixes)
+        and not path.lower().endswith(ignored_suffixes)
+    )
+
+
+@app.middleware("http")
+async def track_page_visits(request: Request, call_next):
+    response = await call_next(request)
+
+    if response.status_code < 400 and should_track_visit(request.url.path, request.method):
+        db = SessionLocal()
+        try:
+            forwarded_for = request.headers.get("x-forwarded-for", "")
+            client_ip = forwarded_for.split(",", 1)[0].strip()
+            if not client_ip and request.client:
+                client_ip = request.client.host
+
+            db.add(AnalyticsVisit(
+                path=request.url.path[:500],
+                user_agent=(request.headers.get("user-agent") or "")[:500],
+                ip=client_ip[:80],
+            ))
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Could not track analytics visit: %s", exc)
+        finally:
+            db.close()
+
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -126,6 +193,14 @@ def serve_favicon():
     if not path.exists():
         raise HTTPException(status_code=404, detail="favicon.ico not found")
     return FileResponse(path)
+
+
+@app.get("/admin-analytics.html", include_in_schema=False)
+def serve_admin_analytics():
+    path = FRONTEND_DIR / "admin-analytics.html"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="admin-analytics.html not found")
+    return FileResponse(path, media_type="text/html; charset=utf-8")
 
 
 def serve_sitemap_file(filename: str):
@@ -1117,6 +1192,127 @@ def admin_delete_comment(
     db.commit()
 
     return {"message": "Comment deleted", "comment_id": comment_id}
+
+
+# ===== ADMIN ANALYTICS =====
+@app.get("/api/admin/analytics")
+def admin_get_analytics(
+    days: int = 14,
+    db: Session = Depends(get_db),
+    admin_ok: bool = Depends(verify_admin_token)
+):
+    safe_days = min(max(int(days or 14), 1), 90)
+    end_date = datetime.utcnow().date()
+    start_date = end_date - timedelta(days=safe_days - 1)
+    start_dt = datetime.combine(start_date, datetime.min.time())
+
+    visit_rows = db.query(
+        func.date(AnalyticsVisit.created_at).label("day"),
+        func.count(AnalyticsVisit.id).label("visits"),
+    ).filter(
+        AnalyticsVisit.created_at >= start_dt
+    ).group_by(
+        func.date(AnalyticsVisit.created_at)
+    ).all()
+    visits_by_day = {str(row.day): int(row.visits or 0) for row in visit_rows}
+
+    registration_rows = db.query(
+        func.date(User.created_at).label("day"),
+        func.count(User.id).label("registrations"),
+    ).filter(
+        User.created_at >= start_dt
+    ).group_by(
+        func.date(User.created_at)
+    ).all()
+    registrations_by_day = {str(row.day): int(row.registrations or 0) for row in registration_rows}
+
+    comment_rows = db.query(
+        func.date(Comment.created_at).label("day"),
+        func.count(Comment.id).label("comments"),
+    ).filter(
+        Comment.created_at >= start_dt
+    ).group_by(
+        func.date(Comment.created_at)
+    ).all()
+    comments_by_day = {str(row.day): int(row.comments or 0) for row in comment_rows}
+
+    daily = []
+    for offset in range(safe_days):
+        day = start_date + timedelta(days=offset)
+        key = day.isoformat()
+        daily.append({
+            "date": key,
+            "visits": visits_by_day.get(key, 0),
+            "registrations": registrations_by_day.get(key, 0),
+            "comments": comments_by_day.get(key, 0),
+        })
+
+    top_books = db.query(Book).order_by(
+        Book.views.desc(),
+        Book.popularity.desc(),
+        Book.id.desc()
+    ).limit(10).all()
+
+    top_chapter_rows = db.query(
+        ReadingProgress.book_id.label("book_id"),
+        ReadingProgress.chapter_number.label("chapter_number"),
+        func.count(ReadingProgress.id).label("reads"),
+    ).group_by(
+        ReadingProgress.book_id,
+        ReadingProgress.chapter_number,
+    ).order_by(
+        desc("reads")
+    ).limit(10).all()
+
+    top_chapters = []
+    for row in top_chapter_rows:
+        book = db.query(Book).filter(Book.id == row.book_id).first()
+        chapter = db.query(Chapter).filter(
+            Chapter.book_id == row.book_id,
+            Chapter.chapter_number == row.chapter_number,
+        ).first()
+        top_chapters.append({
+            "book_id": row.book_id,
+            "book_title": book.title if book else f"Book #{row.book_id}",
+            "chapter_number": row.chapter_number,
+            "chapter_title": chapter.title if chapter else f"Chương {row.chapter_number}",
+            "reads": int(row.reads or 0),
+        })
+
+    comment_stats = {
+        "total": db.query(Comment).count(),
+        "last_24h": db.query(Comment).filter(Comment.created_at >= datetime.utcnow() - timedelta(days=1)).count(),
+        "last_7d": db.query(Comment).filter(Comment.created_at >= datetime.utcnow() - timedelta(days=7)).count(),
+    }
+
+    return {
+        "range": {
+            "days": safe_days,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+        },
+        "summary": {
+            "total_visits": db.query(AnalyticsVisit).count(),
+            "total_books": db.query(Book).count(),
+            "total_chapters": db.query(Chapter).count(),
+            "total_users": db.query(User).count(),
+            "total_comments": comment_stats["total"],
+        },
+        "daily": daily,
+        "top_books": [
+            {
+                "id": book.id,
+                "title": book.title or "Không có tên",
+                "author": book.author or "Chưa rõ",
+                "views": book.views or 0,
+                "popularity": book.popularity or 0,
+                "chapter_count": book.chapter_count or 0,
+            }
+            for book in top_books
+        ],
+        "top_chapters": top_chapters,
+        "comments": comment_stats,
+    }
 
 
 # ===== ADMIN USER MANAGEMENT =====
