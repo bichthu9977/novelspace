@@ -3094,10 +3094,24 @@ function parseBookRoute() {
   };
 }
 
+function isBookRoutePath() {
+  const path = window.location.pathname || "";
+  return (
+    /^\/truyen\/[^/]+(?:\/chuong-\d+)?\/?$/i.test(path) ||
+    /^\/book-\d+(?:\/chuong-\d+)?\/?$/i.test(path) ||
+    /book-\d+(?:-\d+)?/i.test(window.location.hash || "")
+  );
+}
+
 
 function getRouteTargetFromLocation() {
   const hash = window.location.hash || "";
   const path = window.location.pathname || "";
+
+  const parsedBookRoute = parseBookRoute();
+  if (parsedBookRoute) {
+    return parsedBookRoute;
+  }
 
   // Hash route: #book-123-4
   const hashMatch = hash.match(/book-(\d+)(?:-(\d+))?/i);
@@ -3152,6 +3166,10 @@ async function handleRoute() {
   const opened = await openRouteFromCurrentUrl();
 
   if (opened) {
+    return;
+  }
+
+  if (isBookRoutePath()) {
     return;
   }
 
@@ -3282,7 +3300,11 @@ async function loadBooks() {
   try {
     if (!booksGrid) return;
 
-    showBooksSkeleton();
+    const routeMode = isBookRoutePath() || window.TRUYENFULLVN_PAGE?.mode === "chapter";
+
+    if (!routeMode) {
+      showBooksSkeleton();
+    }
 
     let data = [];
     let loadedFromApi = false;
@@ -3392,11 +3414,19 @@ async function loadBooks() {
 
     await renderRandomRankings();
     appReady = true;
-    renderContinueReadingPanel();
-    renderBooks();
-    await loadRecentlyUpdatedBooks(true);
-    await openRouteFromCurrentUrl();
-    await hydrateServerRenderedChapter();
+    if (routeMode) {
+      const hydrated = await hydrateServerRenderedChapter();
+      if (!hydrated) {
+        await openRouteFromCurrentUrl();
+      }
+      if (currentBook) {
+        refreshReaderSidePanels();
+      }
+    } else {
+      renderContinueReadingPanel();
+      renderBooks();
+      await loadRecentlyUpdatedBooks(true);
+    }
   } catch (error) {
     console.error("Không tải được dữ liệu truyện:", error);
 
@@ -4092,7 +4122,6 @@ function bootApp() {
   updateBooksPanelTitle();
   updateAuthUI();
   checkCurrentUser();
-  loadBooks();
 
   // Handle GitHub Pages 404 redirect
   const redirectPath = sessionStorage.getItem('redirectPath');
@@ -4103,6 +4132,8 @@ function bootApp() {
       window.history.replaceState(null, '', redirectPath);
     }
   }
+
+  loadBooks();
 
   lastScrollY = window.scrollY || 0;
   handleMobileTopbarScroll();
