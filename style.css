@@ -802,6 +802,7 @@ body.reader-mobile.topbar-hidden .topbar {
 .book-thumb {
   width: 100%;
   height: 260px;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
   background: #eadfce;
   transition: transform 0.4s ease;
@@ -976,6 +977,7 @@ body.reader-mobile.topbar-hidden .topbar {
 .reader-cover {
   width: 140px;
   height: 190px;
+  aspect-ratio: 14 / 19;
   border-radius: 14px;
   object-fit: cover;
   background: #eadfce;
@@ -1101,6 +1103,8 @@ body.reader-mobile.topbar-hidden .topbar {
 }
 
 .chapter-media {
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
   margin-top: 28px;
   padding: 18px;
   border: 1px solid var(--border);
@@ -2231,6 +2235,8 @@ body.reader-mobile.topbar-hidden .topbar {
 }
 
 .comment-item {
+  content-visibility: auto;
+  contain-intrinsic-size: 110px;
   display: grid;
   grid-template-columns: 42px 1fr;
   gap: 12px;
@@ -2722,6 +2728,8 @@ body.reader-mobile.topbar-hidden .topbar {
 }
 
 .related-book-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 260px;
   width: 100%;
   min-width: 170px;
   text-align: left;
@@ -2744,6 +2752,7 @@ body.reader-mobile.topbar-hidden .topbar {
 .related-book-card img {
   width: 100%;
   height: 180px;
+  aspect-ratio: 3 / 4;
   border-radius: 12px;
   object-fit: cover;
   background: #eadfce;

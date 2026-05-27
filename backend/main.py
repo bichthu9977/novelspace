@@ -45,6 +45,7 @@ from rate_limit import (
     limiter,
     setup_rate_limiting,
 )
+from security import get_client_ip, security_middleware
 from schemas import (
     BookResponse,
     BookDetailResponse,
@@ -64,6 +65,7 @@ logger = logging.getLogger("truyenfullvn")
 
 app = FastAPI(title="TruyenFullvn API")
 setup_rate_limiting(app)
+app.middleware("http")(security_middleware)
 
 
 def should_track_visit(path: str, method: str) -> bool:
@@ -241,6 +243,12 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 
 SECRET_KEY = os.getenv("SECRET_KEY", "truyenfullvn_secret_local")
 ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(30 * 24 * 60)))
+JWT_ISSUER = os.getenv("JWT_ISSUER", "").strip()
+JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "").strip()
+
+if SECRET_KEY == "truyenfullvn_secret_local":
+    logger.warning("Using local default SECRET_KEY. Set SECRET_KEY in production.")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
@@ -256,8 +264,17 @@ def verify_password(password: str, password_hash: str):
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=30)
-    to_encode.update({"exp": expire})
+    now = datetime.utcnow()
+    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({
+        "exp": expire,
+        "iat": now,
+        "typ": "access",
+    })
+    if JWT_ISSUER:
+        to_encode["iss"] = JWT_ISSUER
+    if JWT_AUDIENCE:
+        to_encode["aud"] = JWT_AUDIENCE
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -266,9 +283,24 @@ def get_current_user(
     db: Session = Depends(get_db)
 ):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        decode_kwargs = {
+            "key": SECRET_KEY,
+            "algorithms": [ALGORITHM],
+            "options": {
+                "verify_aud": bool(JWT_AUDIENCE),
+                "verify_iss": bool(JWT_ISSUER),
+            },
+        }
+        if JWT_AUDIENCE:
+            decode_kwargs["audience"] = JWT_AUDIENCE
+        if JWT_ISSUER:
+            decode_kwargs["issuer"] = JWT_ISSUER
+
+        payload = jwt.decode(token, **decode_kwargs)
+        if payload.get("typ") and payload.get("typ") != "access":
+            raise JWTError("Invalid token type")
         user_id = int(payload.get("sub"))
-    except Exception:
+    except (JWTError, TypeError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -819,11 +851,13 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
     email = (user_data.email or "").strip().lower()
 
     if not email:
+        logger.warning("Register rejected: missing email ip=%s", get_client_ip(request))
         raise HTTPException(status_code=400, detail="Vui lòng nhập email")
 
     old_user = db.query(User).filter(func.lower(User.email) == email).first()
 
     if old_user:
+        logger.warning("Register rejected: duplicate email ip=%s email=%s", get_client_ip(request), email)
         raise HTTPException(status_code=400, detail="Email đã tồn tại")
 
     user = User(
@@ -837,9 +871,11 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
         db.refresh(user)
     except IntegrityError:
         db.rollback()
+        logger.warning("Register rejected: duplicate email race ip=%s email=%s", get_client_ip(request), email)
         raise HTTPException(status_code=400, detail="Email đã tồn tại")
     except Exception:
         db.rollback()
+        logger.exception("Register failed ip=%s email=%s", get_client_ip(request), email)
         raise HTTPException(status_code=500, detail="Không tạo được tài khoản, vui lòng thử lại")
 
     token = create_access_token({"sub": str(user.id)})
@@ -854,6 +890,7 @@ def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db))
     user = db.query(User).filter(User.email == email).first()
 
     if not user or not verify_password(user_data.password, user.password_hash):
+        logger.warning("Login failed ip=%s email=%s", get_client_ip(request), email)
         raise HTTPException(status_code=401, detail="Wrong email or password")
 
     token = create_access_token({"sub": str(user.id)})
