@@ -1281,7 +1281,6 @@ body.reader-mobile.topbar-hidden .topbar {
 
 /* ===== DESKTOP OVERRIDES ===== */
 @media (min-width: 641px) {
-  body.reader-mobile.topbar-hidden .topbar,
   body.reader-mobile.topbar-compact .topbar {
     transform: none;
     opacity: 1;
@@ -1318,6 +1317,12 @@ body.reader-mobile.topbar-hidden .topbar {
   .mobile-subitem,
   .mobile-nav-arrow {
     display: none !important;
+  }
+
+  body.reader-mobile.topbar-hidden .topbar {
+    transform: translateY(-110%);
+    opacity: 0;
+    pointer-events: none;
   }
 }
 

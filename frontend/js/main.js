@@ -196,7 +196,7 @@ function isHomeOpen() {
 }
 
 function shouldUseMobileTopbarEffect() {
-  return isMobileView() && (isReaderOpen() || isHomeOpen());
+  return isReaderOpen() || isHomeOpen();
 }
 
 function closeMobilePanels() {
