@@ -1,4 +1,4 @@
-﻿import { apiUrl, normalizeAudioUrl } from "./api.js";
+import { apiUrl, normalizeAudioUrl } from "./api.js";
 import { $, assetUrl, escapeHtml, safeParseJSON } from "./ui.js";
 import {
   clearAuthToken as clearStoredAuthToken,
@@ -58,8 +58,13 @@ let currentFetchController = null;
 let searchModeActive = false;
 let searchResults = [];
 let searchDebounceTimer = null;
+let suggestDebounceTimer = null;
 let progressSyncTimer = null;
 let searchFetchController = null;
+let suggestFetchController = null;
+let searchSuggestBox = null;
+let searchSuggestions = [];
+let activeSuggestionIndex = -1;
 const bookDetailCache = new Map();
 const BOOK_DETAIL_CACHE_MAX = 80;
 const BOOKS_CACHE_KEY = "truyenfullvnBooksCacheV1";
@@ -244,7 +249,7 @@ function updateMobileToggleState() {
     mobileSearchToggle.setAttribute("aria-expanded", String(searchOpen));
     mobileSearchToggle.setAttribute(
       "aria-label",
-      searchOpen ? "ÄÃ³ng tÃ¬m kiáº¿m" : "Má»Ÿ tÃ¬m kiáº¿m"
+      searchOpen ? "Đóng tìm kiếm" : "Mở tìm kiếm"
     );
     mobileSearchToggle.classList.toggle("active", searchOpen);
   }
@@ -254,7 +259,7 @@ function updateMobileToggleState() {
     mobileMenuToggle.setAttribute("aria-expanded", String(menuOpen));
     mobileMenuToggle.setAttribute(
       "aria-label",
-      menuOpen ? "ÄÃ³ng menu" : "Má»Ÿ menu"
+      menuOpen ? "Đóng menu" : "Mở menu"
     );
     mobileMenuToggle.classList.toggle("active", menuOpen);
   }
@@ -384,13 +389,71 @@ function handleMobileTopbarScroll() {
   }
 }
 
+function fixMojibakeText(value) {
+  const text = String(value ?? "");
+  const markerPattern = /(?:\u00c3|\u00c2|\u00c6|\u00c4|\u00c5|\u00e2|\u00f0|\u00e1\u00ba|\u00e1\u00bb)/;
+
+  if (!markerPattern.test(text)) {
+    return text;
+  }
+
+  const windows1252Bytes = {
+    0x20ac: 0x80,
+    0x201a: 0x82,
+    0x0192: 0x83,
+    0x201e: 0x84,
+    0x2026: 0x85,
+    0x2020: 0x86,
+    0x2021: 0x87,
+    0x02c6: 0x88,
+    0x2030: 0x89,
+    0x0160: 0x8a,
+    0x2039: 0x8b,
+    0x0152: 0x8c,
+    0x017d: 0x8e,
+    0x2018: 0x91,
+    0x2019: 0x92,
+    0x201c: 0x93,
+    0x201d: 0x94,
+    0x2022: 0x95,
+    0x2013: 0x96,
+    0x2014: 0x97,
+    0x02dc: 0x98,
+    0x2122: 0x99,
+    0x0161: 0x9a,
+    0x203a: 0x9b,
+    0x0153: 0x9c,
+    0x017e: 0x9e,
+    0x0178: 0x9f
+  };
+  const runPattern = /(?:\u00c3|\u00c2|\u00c6|\u00c4|\u00c5|\u00e2|\u00f0|\u00e1\u00ba|\u00e1\u00bb)[\x00-\x7f\u0080-\u00ff\u20ac\u201a\u0192\u201e\u2026\u2020\u2021\u02c6\u2030\u0160\u2039\u0152\u017d\u2018\u2019\u201c\u201d\u2022\u2013\u2014\u02dc\u2122\u0161\u203a\u0153\u017e\u0178]*/g;
+
+  return text.replace(runPattern, (segment) => {
+    try {
+      return decodeURIComponent(
+        Array.from(segment)
+          .map((char) => {
+            const code = char.charCodeAt(0);
+            const byte = code <= 0xff ? code : windows1252Bytes[code];
+            if (byte === undefined) {
+              throw new Error("Unsupported mojibake byte");
+            }
+            return `%${byte.toString(16).padStart(2, "0")}`;
+          })
+          .join("")
+      );
+    } catch {
+      return segment;
+    }
+  });
+}
 function normalizeBook(fullBook, fallback = {}) {
   const normalizedChapters = Array.isArray(fullBook?.chapters)
     ? fullBook.chapters.map((chapter, index) => ({
-        title: chapter?.title || `ChÆ°Æ¡ng ${index + 1}`,
+        title: fixMojibakeText(chapter?.title || `Chương ${index + 1}`),
         content: Array.isArray(chapter?.content)
           ? chapter.content
-              .map((p) => String(p ?? "").trim())
+              .map((p) => fixMojibakeText(String(p ?? "").trim()))
               .filter((p) => p !== "")
           : [],
         audio: normalizeAudioUrl(chapter?.audio || chapter?.audioUrl || chapter?.audio_url || ""),
@@ -400,15 +463,15 @@ function normalizeBook(fullBook, fallback = {}) {
 
   return {
     id: Number(fullBook?.id ?? fallback?.id ?? 0),
-    title: fullBook?.title || fallback?.title || "KhÃ´ng cÃ³ tÃªn",
-    author: fullBook?.author || fallback?.author || "ChÆ°a rÃµ",
+    title: fixMojibakeText(fullBook?.title || fallback?.title || "Không có tên"),
+    author: fixMojibakeText(fullBook?.author || fallback?.author || "Chưa rõ"),
     tags: Array.isArray(fullBook?.tags)
-      ? fullBook.tags
+      ? fullBook.tags.map(fixMojibakeText)
       : Array.isArray(fallback?.tags)
-        ? fallback.tags
+        ? fallback.tags.map(fixMojibakeText)
         : [],
     popularity: Number(fullBook?.popularity ?? fallback?.popularity ?? 0),
-    desc: fullBook?.desc || fallback?.desc || "",
+    desc: fixMojibakeText(fullBook?.desc || fallback?.desc || ""),
     cover: fullBook?.cover || fallback?.cover || "images/default.jpg",
     file: fullBook?.file || fallback?.file || "",
     seoUrl:
@@ -472,7 +535,7 @@ function setAuthMode(mode) {
   authMode = mode === "register" ? "register" : "login";
 
   if (authTitle) {
-    authTitle.textContent = authMode === "register" ? "ÄÄƒng kÃ½ TruyenFullvn" : "ÄÄƒng nháº­p TruyenFullvn";
+    authTitle.textContent = authMode === "register" ? "Đăng ký TruyenFullvn" : "Đăng nhập TruyenFullvn";
   }
 
   if (authPasswordConfirmWrap) {
@@ -567,15 +630,15 @@ function findBookById(bookId) {
 }
 
 function makeAccountBookItem(book, extraText = "", chapterIndex = 0) {
-  const safeTitle = escapeHtml(book?.title || `Truyá»‡n #${book?.id || ""}`);
-  const safeMeta = escapeHtml(extraText || `${book?.author || "ChÆ°a rÃµ"} â€¢ ${getBookChapterCount(book)} chÆ°Æ¡ng`);
+  const safeTitle = escapeHtml(book?.title || `Truyện #${book?.id || ""}`);
+  const safeMeta = escapeHtml(extraText || `${book?.author || "Chưa rõ"} • ${getBookChapterCount(book)} chương`);
   const cover = escapeHtml(assetUrl(book?.cover || "images/default.jpg"));
   const id = Number(book?.id || 0);
   const chapter = Math.max(0, Number(chapterIndex) || 0);
 
   return `
     <button class="account-book-item" type="button" data-account-book="${id}" data-account-chapter="${chapter}">
-      <img src="${cover}" alt="BÃ¬a ${safeTitle}" onerror="this.onerror=null;this.src='/images/default.jpg'" />
+      <img src="${cover}" alt="Bìa ${safeTitle}" onerror="this.onerror=null;this.src='/images/default.jpg'" />
       <span>
         <strong>${safeTitle}</strong>
         <small>${safeMeta}</small>
@@ -585,7 +648,7 @@ function makeAccountBookItem(book, extraText = "", chapterIndex = 0) {
 }
 
 function renderAccountPanel() {
-  const email = localStorage.getItem(STORAGE_KEYS.authEmail) || "NgÆ°á»i Ä‘á»c TruyenFullvn";
+  const email = localStorage.getItem(STORAGE_KEYS.authEmail) || "Người đọc TruyenFullvn";
 
   if (accountEmail) {
     accountEmail.textContent = email;
@@ -601,11 +664,11 @@ function renderAccountPanel() {
       ? shelfBooks
           .map((book) => makeAccountBookItem(
             book,
-            `${book.author || "ChÆ°a rÃµ"} â€¢ ${getBookChapterCount(book)} chÆ°Æ¡ng`,
+            `${book.author || "Chưa rõ"} • ${getBookChapterCount(book)} chương`,
             getReadingProgress(book.id)
           ))
           .join("")
-      : '<div class="account-empty">ChÆ°a cÃ³ truyá»‡n trong tá»§ sÃ¡ch.</div>';
+      : '<div class="account-empty">Chưa có truyện trong tủ sách.</div>';
   }
 
   const progressMap = getReadingProgressMap();
@@ -626,12 +689,12 @@ function renderAccountPanel() {
             const chapterNumber = Math.min(chapterIndex + 1, total);
             return makeAccountBookItem(
               book,
-              `Äang Ä‘á»c chÆ°Æ¡ng ${chapterNumber}/${total}`,
+              `Đang đọc chương ${chapterNumber}/${total}`,
               chapterIndex
             );
           })
           .join("")
-      : '<div class="account-empty">ChÆ°a cÃ³ tiáº¿n Ä‘á»™ Ä‘á»c.</div>';
+      : '<div class="account-empty">Chưa có tiến độ đọc.</div>';
   }
 }
 
@@ -641,7 +704,7 @@ function updateAuthUI() {
 
 
   if (loginLink) {
-    loginLink.textContent = email ? `Xin chÃ o ${email}` : "ÄÄƒng nháº­p";
+    loginLink.textContent = email ? `Xin chào ${email}` : "Đăng nhập";
     loginLink.classList.toggle("logged-in", !!email);
   }
 
@@ -793,21 +856,21 @@ async function authRequest(endpoint) {
   const isRegister = endpoint.includes("register");
 
   if (!email || !password) {
-    setAuthMessage("Vui lÃ²ng nháº­p email vÃ  máº­t kháº©u.", "error");
+    setAuthMessage("Vui lòng nhập email và mật khẩu.", "error");
     return;
   }
 
   if (password.length < 6) {
-    setAuthMessage("Máº­t kháº©u cáº§n tá»‘i thiá»ƒu 6 kÃ½ tá»±.", "error");
+    setAuthMessage("Mật khẩu cần tối thiểu 6 ký tự.", "error");
     return;
   }
 
   if (isRegister && password !== passwordConfirm) {
-    setAuthMessage("Máº­t kháº©u nháº­p láº¡i khÃ´ng khá»›p.", "error");
+    setAuthMessage("Mật khẩu nhập lại không khớp.", "error");
     return;
   }
 
-  setAuthMessage("Äang xá»­ lÃ½...");
+  setAuthMessage("Đang xử lý...");
 
   try {
     const res = await fetch(apiUrl(endpoint), {
@@ -823,7 +886,7 @@ async function authRequest(endpoint) {
     }
 
     if (!data.access_token) {
-      throw new Error("Backend khÃ´ng tráº£ access_token.");
+      throw new Error("Backend không trả access_token.");
     }
 
     setAuthToken(data.access_token);
@@ -838,10 +901,10 @@ async function authRequest(endpoint) {
     updateSaveShelfButton(currentBook?.id);
     renderBooks();
 
-    setAuthMessage("ÄÄƒng nháº­p thÃ nh cÃ´ng.", "success");
+    setAuthMessage("Đăng nhập thành công.", "success");
     setTimeout(() => closeAuthModal(), 450);
   } catch (err) {
-    setAuthMessage(`Lá»—i: ${err.message}`, "error");
+    setAuthMessage(`Lỗi: ${err.message}`, "error");
   }
 }
 
@@ -869,7 +932,7 @@ async function checkCurrentUser() {
     await syncBookmarksFromAPI();
     await syncReadingProgressFromAPI();
   } catch (err) {
-    console.warn("Token khÃ´ng há»£p lá»‡ hoáº·c backend chÆ°a báº­t:", err);
+    console.warn("Token không hợp lệ hoặc backend chưa bật:", err);
     clearAuthToken();
   }
 
@@ -901,7 +964,7 @@ async function syncBookmarksFromAPI() {
       setSavedShelf(merged);
     }
   } catch (err) {
-    console.warn("KhÃ´ng sync Ä‘Æ°á»£c bookmarks tá»« API:", err);
+    console.warn("Không sync được bookmarks từ API:", err);
   }
 }
 
@@ -921,7 +984,7 @@ async function saveRemoteReadingProgress(bookId, chapterNumber) {
       throw new Error(data.detail || `HTTP ${res.status}`);
     }
   } catch (err) {
-    console.warn("KhÃ´ng lÆ°u Ä‘Æ°á»£c tiáº¿n Ä‘á»™ Ä‘á»c lÃªn server:", err);
+    console.warn("Không lưu được tiến độ đọc lên server:", err);
   }
 }
 
@@ -964,7 +1027,7 @@ async function syncReadingProgressFromAPI() {
     setReadingProgressMap(progress);
     renderContinueReadingPanel();
   } catch (err) {
-    console.warn("KhÃ´ng sync Ä‘Æ°á»£c tiáº¿n Ä‘á»™ Ä‘á»c tá»« API:", err);
+    console.warn("Không sync được tiến độ đọc từ API:", err);
   }
 }
 
@@ -1016,7 +1079,7 @@ async function toggleShelfSmart(bookId, chapterNumber = 1) {
       refreshUnreadNotifications();
       return true;
     } catch (err) {
-      console.warn("Bookmark API lá»—i, fallback localStorage:", err);
+      console.warn("Bookmark API lỗi, fallback localStorage:", err);
     }
   } else {
     openAuthModal();
@@ -1038,7 +1101,7 @@ function logoutUser(e) {
   }
 
   renderBooks();
-  alert("Báº¡n Ä‘Ã£ Ä‘Äƒng xuáº¥t.");
+  alert("Bạn đã đăng xuất.");
 }
 
 
@@ -1065,7 +1128,7 @@ function renderComments(comments) {
   if (!commentsList) return;
 
   if (!Array.isArray(comments) || !comments.length) {
-    commentsList.innerHTML = '<div class="comment-empty">ChÆ°a cÃ³ bÃ¬nh luáº­n nÃ o. HÃ£y lÃ  ngÆ°á»i Ä‘áº§u tiÃªn bÃ¬nh luáº­n truyá»‡n nÃ y.</div>';
+    commentsList.innerHTML = '<div class="comment-empty">Chưa có bình luận nào. Hãy là người đầu tiên bình luận truyện này.</div>';
     return;
   }
 
@@ -1085,7 +1148,7 @@ function renderComments(comments) {
           </div>
           <div class="comment-content">${content}</div>
           <div class="comment-actions-row">
-            <span>â™¡ ${likes}</span>
+            <span>♡ ${likes}</span>
           </div>
         </div>
       </article>
@@ -1096,7 +1159,7 @@ function renderComments(comments) {
 async function loadBookComments() {
   if (!currentBook || !commentsList) return;
 
-  commentsList.innerHTML = '<div class="comment-empty">Äang táº£i bÃ¬nh luáº­n...</div>';
+  commentsList.innerHTML = '<div class="comment-empty">Đang tải bình luận...</div>';
   setCommentStatus("");
 
   try {
@@ -1110,11 +1173,11 @@ async function loadBookComments() {
     renderComments(comments);
 
     if (commentsHint) {
-      commentsHint.textContent = `BÃ¬nh luáº­n chung cho truyá»‡n "${currentBook.title}".`;
+      commentsHint.textContent = `Bình luận chung cho truyện "${currentBook.title}".`;
     }
   } catch (err) {
-    console.warn("KhÃ´ng táº£i Ä‘Æ°á»£c bÃ¬nh luáº­n:", err);
-    commentsList.innerHTML = '<div class="comment-empty">ChÆ°a táº£i Ä‘Æ°á»£c bÃ¬nh luáº­n. Kiá»ƒm tra backend hoáº·c API comments.</div>';
+    console.warn("Không tải được bình luận:", err);
+    commentsList.innerHTML = '<div class="comment-empty">Chưa tải được bình luận. Kiểm tra backend hoặc API comments.</div>';
   }
 }
 
@@ -1122,7 +1185,7 @@ async function submitBookComment() {
   if (!currentBook) return;
 
   if (!isLoggedIn()) {
-    setCommentStatus("Báº¡n cáº§n Ä‘Äƒng nháº­p Ä‘á»ƒ bÃ¬nh luáº­n.", "error");
+    setCommentStatus("Bạn cần đăng nhập để bình luận.", "error");
     openAuthModal();
     return;
   }
@@ -1130,16 +1193,16 @@ async function submitBookComment() {
   const content = commentInput?.value?.trim() || "";
 
   if (!content) {
-    setCommentStatus("Vui lÃ²ng nháº­p ná»™i dung bÃ¬nh luáº­n.", "error");
+    setCommentStatus("Vui lòng nhập nội dung bình luận.", "error");
     return;
   }
 
   if (content.length > 1000) {
-    setCommentStatus("BÃ¬nh luáº­n tá»‘i Ä‘a 1000 kÃ½ tá»±.", "error");
+    setCommentStatus("Bình luận tối đa 1000 ký tự.", "error");
     return;
   }
 
-  setCommentStatus("Äang gá»­i...");
+  setCommentStatus("Đang gửi...");
 
   try {
     const res = await postBookComment(
@@ -1158,11 +1221,11 @@ async function submitBookComment() {
       commentInput.value = "";
     }
 
-    setCommentStatus("ÄÃ£ gá»­i bÃ¬nh luáº­n.", "success");
+    setCommentStatus("Đã gửi bình luận.", "success");
     await loadBookComments();
   } catch (err) {
-    console.warn("KhÃ´ng gá»­i Ä‘Æ°á»£c bÃ¬nh luáº­n:", err);
-    setCommentStatus(`Lá»—i: ${err.message}`, "error");
+    console.warn("Không gửi được bình luận:", err);
+    setCommentStatus(`Lỗi: ${err.message}`, "error");
   }
 }
 
@@ -1174,12 +1237,12 @@ function updateCommentLoginState() {
 
   if (commentInput) {
     commentInput.placeholder = loggedIn
-      ? "Viáº¿t bÃ¬nh luáº­n cá»§a báº¡n vá» truyá»‡n nÃ y..."
-      : "ÄÄƒng nháº­p Ä‘á»ƒ bÃ¬nh luáº­n vá» truyá»‡n nÃ y...";
+      ? "Viết bình luận của bạn về truyện này..."
+      : "Đăng nhập để bình luận về truyện này...";
   }
 
   if (commentSubmitBtn) {
-    commentSubmitBtn.textContent = loggedIn ? "Gá»­i bÃ¬nh luáº­n" : "ÄÄƒng nháº­p Ä‘á»ƒ bÃ¬nh luáº­n";
+    commentSubmitBtn.textContent = loggedIn ? "Gửi bình luận" : "Đăng nhập để bình luận";
   }
 }
 
@@ -1208,7 +1271,7 @@ function setCachedBooksIndex(items) {
       items
     }));
   } catch (err) {
-    console.warn("KhÃ´ng lÆ°u Ä‘Æ°á»£c cache danh sÃ¡ch truyá»‡n:", err);
+    console.warn("Không lưu được cache danh sách truyện:", err);
   }
 }
 
@@ -1288,8 +1351,8 @@ function renderContinueReadingPanel() {
   if (toggleBtn) {
     toggleBtn.classList.toggle("hidden", allItems.length <= 2);
     toggleBtn.textContent = continueExpanded
-      ? "Thu gá»n â–´"
-      : `ThÃªm ${Math.min(Math.max(allItems.length - 2, 0), 4)} truyá»‡n â–¾`;
+      ? "Thu gọn ▴"
+      : `Thêm ${Math.min(Math.max(allItems.length - 2, 0), 4)} truyện ▾`;
   }
 
   if (!allItems.length) {
@@ -1299,16 +1362,16 @@ function renderContinueReadingPanel() {
 
   grid.innerHTML = visibleItems.map(({ book, chapterIndex, chapterNumber, total }) => {
     const cover = escapeHtml(assetUrl(book.cover || "images/default.jpg"));
-    const title = escapeHtml(book.title || "KhÃ´ng cÃ³ tÃªn");
-    const author = escapeHtml(book.author || "ChÆ°a rÃµ");
+    const title = escapeHtml(book.title || "Không có tên");
+    const author = escapeHtml(book.author || "Chưa rõ");
     const pct = Math.max(3, Math.min(100, Math.round((chapterNumber / Math.max(total, 1)) * 100)));
 
     return `
       <button class="continue-card" type="button" data-continue-book="${escapeHtml(book.id)}" data-continue-chapter="${chapterIndex}">
-        <img src="${cover}" alt="BÃ¬a ${title}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/default.jpg'" />
+        <img src="${cover}" alt="Bìa ${title}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/default.jpg'" />
         <span class="continue-info">
           <strong>${title}</strong>
-          <small>${author} â€¢ ChÆ°Æ¡ng ${chapterNumber}/${total}</small>
+          <small>${author} • Chương ${chapterNumber}/${total}</small>
           <span class="continue-progress-bar"><span style="width:${pct}%"></span></span>
         </span>
       </button>
@@ -1486,7 +1549,7 @@ async function loadRelatedBooksFromAPIFallback() {
     relatedBooksVisibleCount = 4;
     renderRelatedBooks(false);
   } catch (err) {
-    console.warn("KhÃ´ng táº£i Ä‘Æ°á»£c gá»£i Ã½ fallback:", err);
+    console.warn("Không tải được gợi ý fallback:", err);
   }
 }
 
@@ -1510,7 +1573,7 @@ function renderRelatedBooks(reset = false) {
   section.classList.toggle("hidden", visibleBooks.length === 0);
 
   if (!visibleBooks.length) {
-    grid.innerHTML = '<div class="comment-empty">Äang táº£i gá»£i Ã½ truyá»‡n...</div>';
+    grid.innerHTML = '<div class="comment-empty">Đang tải gợi ý truyện...</div>';
     if (moreBtn) moreBtn.classList.add("hidden");
     loadRelatedBooksFromAPIFallback();
     return;
@@ -1518,7 +1581,7 @@ function renderRelatedBooks(reset = false) {
 
   if (moreBtn) {
     moreBtn.classList.toggle("hidden", relatedBooksPool.length <= relatedBooksVisibleCount);
-    moreBtn.textContent = "Xem thÃªm";
+    moreBtn.textContent = "Xem thêm";
   }
 
   grid.innerHTML = visibleBooks.map((book) => {
@@ -1528,9 +1591,9 @@ function renderRelatedBooks(reset = false) {
 
     return `
       <button class="related-book-card" type="button" data-related-book="${escapeHtml(book.id)}">
-        <img src="${escapeHtml(assetUrl(book.cover || "images/default.jpg"))}" alt="BÃ¬a ${escapeHtml(book.title || "")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/default.jpg'" />
-        <strong>${escapeHtml(book.title || "KhÃ´ng cÃ³ tÃªn")}</strong>
-        <small>${escapeHtml(book.author || "ChÆ°a rÃµ")} â€¢ ${getBookChapterCount(book)} chÆ°Æ¡ng</small>
+        <img src="${escapeHtml(assetUrl(book.cover || "images/default.jpg"))}" alt="Bìa ${escapeHtml(book.title || "")}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/default.jpg'" />
+        <strong>${escapeHtml(book.title || "Không có tên")}</strong>
+        <small>${escapeHtml(book.author || "Chưa rõ")} • ${getBookChapterCount(book)} chương</small>
         <span class="related-tags">${tagsHtml}</span>
       </button>
     `;
@@ -1591,35 +1654,35 @@ function hasReadingProgress(bookId) {
 
 function getProgressText(book) {
   const totalChapters = getBookChapterCount(book);
-  if (!totalChapters) return "ChÆ°a cÃ³ chÆ°Æ¡ng";
+  if (!totalChapters) return "Chưa có chương";
 
   if (!hasReadingProgress(book.id)) {
-    return `ChÆ°a Ä‘á»c â€¢ ${totalChapters} chÆ°Æ¡ng`;
+    return `Chưa đọc • ${totalChapters} chương`;
   }
 
   const savedIndex = getReadingProgress(book.id);
   const currentChapter = Math.min(savedIndex + 1, totalChapters);
-  return `Äang Ä‘á»c: ChÆ°Æ¡ng ${currentChapter}/${totalChapters}`;
+  return `Đang đọc: Chương ${currentChapter}/${totalChapters}`;
 }
 
 function updateSaveShelfButton(bookId) {
   if (!saveShelfBtn) return;
 
   const saved = isBookSaved(bookId);
-  const loginHint = isLoggedIn() ? "" : " (Ä‘Äƒng nháº­p Ä‘á»ƒ Ä‘á»“ng bá»™)";
-  saveShelfBtn.textContent = saved ? "â™¥ ÄÃ£ lÆ°u vÃ o tá»§ sÃ¡ch" : `â™¡ LÆ°u truyá»‡n nÃ y${loginHint}`;
+  const loginHint = isLoggedIn() ? "" : " (đăng nhập để đồng bộ)";
+  saveShelfBtn.textContent = saved ? "♥ Đã lưu vào tủ sách" : `♡ Lưu truyện này${loginHint}`;
   saveShelfBtn.classList.toggle("saved", saved);
 }
 
 function updateBooksPanelTitle() {
   if (booksPanelTitle) {
-    booksPanelTitle.textContent = showShelfOnly ? "Tá»§ sÃ¡ch cá»§a báº¡n" : "Kho truyá»‡n ná»•i báº­t";
+    booksPanelTitle.textContent = showShelfOnly ? "Tủ sách của bạn" : "Kho truyện nổi bật";
     return;
   }
 
   const fallbackTitle = document.querySelector(".section-title.section-title-main");
   if (fallbackTitle) {
-    fallbackTitle.textContent = showShelfOnly ? "Tá»§ sÃ¡ch cá»§a báº¡n" : "Kho truyá»‡n ná»•i báº­t";
+    fallbackTitle.textContent = showShelfOnly ? "Tủ sách của bạn" : "Kho truyện nổi bật";
   }
 }
 
@@ -1641,7 +1704,7 @@ function applyTheme(theme) {
 
 function updateMetaTags(book) {
   // Update standard meta tags
-  const description = book.desc || `Äá»c truyá»‡n "${book.title}" online miá»…n phÃ­`;
+  const description = book.desc || `Đọc truyện "${book.title}" online miễn phí`;
   const imageUrl = book.cover ? (book.cover.startsWith('http') ? book.cover : window.location.origin + '/' + book.cover) : window.location.origin + '/images/default.jpg';
   const bookUrl = window.location.href;
   const tags = Array.isArray(book.tags) ? book.tags.join(', ') : '';
@@ -1662,7 +1725,7 @@ function updateMetaTags(book) {
     keywordsMeta.name = 'keywords';
     document.head.appendChild(keywordsMeta);
   }
-  keywordsMeta.content = `${book.title}, ${book.author}, ${tags}, Ä‘á»c truyá»‡n online, TruyenFullvn`;
+  keywordsMeta.content = `${book.title}, ${book.author}, ${tags}, đọc truyện online, TruyenFullvn`;
 
   // Update OG tags
   updateOrCreateMeta('property', 'og:title', `${book.title} | TruyenFullvn`);
@@ -1712,14 +1775,14 @@ function updateStructuredData(book, imageUrl) {
     "name": book.title,
     "author": {
       "@type": "Person",
-      "name": book.author || "ChÆ°a rÃµ"
+      "name": book.author || "Chưa rõ"
     },
     "image": imageUrl,
-    "description": book.desc || `Äá»c truyá»‡n "${book.title}" online miá»…n phÃ­`,
+    "description": book.desc || `Đọc truyện "${book.title}" online miễn phí`,
     "url": window.location.href,
     "inLanguage": "vi",
     "genre": Array.isArray(book.tags) ? book.tags : [],
-    "numberOfPages": (Array.isArray(book.chapters) ? book.chapters.length : 0) * 10 // Æ¯á»›c tÃ­nh
+    "numberOfPages": (Array.isArray(book.chapters) ? book.chapters.length : 0) * 10 // Ước tính
   };
 
   scriptTag = document.createElement('script');
@@ -1777,7 +1840,7 @@ function renderCategoryControls() {
       class="chip-btn ${activeChip === tag ? "active" : ""} ${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}
       data-chip="${escapeHtml(tag)}"
       type="button"
-    >${tag === "all" ? "Táº¥t cáº£" : escapeHtml(tag)}</button>
+    >${tag === "all" ? "Tất cả" : escapeHtml(tag)}</button>
   `;
 
   const makeMobileButton = (tag, extra = false) => `
@@ -1785,12 +1848,12 @@ function renderCategoryControls() {
       class="mobile-subitem ${activeChip === tag ? "active" : ""} ${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}
       type="button"
       data-mobile-chip="${escapeHtml(tag)}"
-    >${tag === "all" ? "Táº¥t cáº£" : escapeHtml(tag)}</button>
+    >${tag === "all" ? "Tất cả" : escapeHtml(tag)}</button>
   `;
 
   const makeSidebarItem = (tag, extra = false) => `
     <li class="${extra ? "category-extra" : ""}" ${extra ? "hidden" : ""}>
-      <a href="#" class="${activeChip === tag ? "active" : ""}" data-chip="${escapeHtml(tag)}">${tag === "all" ? "Táº¥t cáº£" : escapeHtml(tag)}</a>
+      <a href="#" class="${activeChip === tag ? "active" : ""}" data-chip="${escapeHtml(tag)}">${tag === "all" ? "Tất cả" : escapeHtml(tag)}</a>
     </li>
   `;
 
@@ -1799,7 +1862,7 @@ function renderCategoryControls() {
       ${makeChipButton("all")}
       ${firstTags.map((tag) => makeChipButton(tag)).join("")}
       ${restTags.map((tag) => makeChipButton(tag, true)).join("")}
-      ${hasMore ? '<button class="chip-btn category-toggle" type="button" data-category-toggle>ThÃªm thá»ƒ loáº¡i â–¾</button>' : ""}
+      ${hasMore ? '<button class="chip-btn category-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button>' : ""}
     `;
   }
 
@@ -1809,7 +1872,7 @@ function renderCategoryControls() {
       ${makeSidebarItem("all")}
       ${firstTags.map((tag) => makeSidebarItem(tag)).join("")}
       ${restTags.map((tag) => makeSidebarItem(tag, true)).join("")}
-      ${hasMore ? '<li><button class="category-sidebar-toggle" type="button" data-category-toggle>ThÃªm thá»ƒ loáº¡i â–¾</button></li>' : ""}
+      ${hasMore ? '<li><button class="category-sidebar-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button></li>' : ""}
     `;
   }
 
@@ -1818,7 +1881,7 @@ function renderCategoryControls() {
       ${makeMobileButton("all")}
       ${firstTags.map((tag) => makeMobileButton(tag)).join("")}
       ${restTags.map((tag) => makeMobileButton(tag, true)).join("")}
-      ${hasMore ? '<button class="mobile-subitem category-toggle" type="button" data-category-toggle>ThÃªm thá»ƒ loáº¡i â–¾</button>' : ""}
+      ${hasMore ? '<button class="mobile-subitem category-toggle" type="button" data-category-toggle>Thêm thể loại ▾</button>' : ""}
     `;
   }
 }
@@ -1832,7 +1895,7 @@ function collapseCategoryExtrasByDefault() {
     });
     const toggle = container.querySelector("[data-category-toggle]");
     if (toggle) {
-      toggle.textContent = "ThÃªm thá»ƒ loáº¡i â–¾";
+      toggle.textContent = "Thêm thể loại ▾";
     }
   });
 }
@@ -1847,7 +1910,7 @@ function toggleCategoryList(toggleButton) {
     item.hidden = !isOpen;
   });
 
-  toggleButton.textContent = isOpen ? "Thu gá»n â–´" : "ThÃªm thá»ƒ loáº¡i â–¾";
+  toggleButton.textContent = isOpen ? "Thu gọn ▴" : "Thêm thể loại ▾";
 }
 
 function updateCategoryActiveState() {
@@ -1860,6 +1923,222 @@ function updateCategoryActiveState() {
   });
 }
 
+
+function ensureSearchSuggestBox() {
+  if (!searchWrap || searchSuggestBox) return searchSuggestBox;
+
+  searchSuggestBox = document.createElement("div");
+  searchSuggestBox.id = "searchSuggestBox";
+  searchSuggestBox.className = "search-suggest-box";
+  searchSuggestBox.setAttribute("role", "listbox");
+  searchSuggestBox.hidden = true;
+  searchWrap.appendChild(searchSuggestBox);
+
+  searchSuggestBox.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+
+  searchSuggestBox.addEventListener("click", (event) => {
+    const item = event.target instanceof HTMLElement
+      ? event.target.closest("[data-suggestion-index]")
+      : null;
+    if (!item) return;
+
+    chooseSearchSuggestion(Number(item.getAttribute("data-suggestion-index")));
+  });
+
+  return searchSuggestBox;
+}
+
+function normalizeSuggestion(raw, index = 0) {
+  return {
+    id: Number(raw?.id ?? index + 1),
+    title: fixMojibakeText(raw?.title || "Không có tên"),
+    author: fixMojibakeText(raw?.author || "Chưa rõ"),
+    seoUrl: raw?.seoUrl || raw?.seo_url || `book-${Number(raw?.id ?? index + 1)}`,
+    cover: raw?.cover || "",
+    chapterCount: Number(raw?.chapterCount ?? raw?.chapter_count ?? 0),
+    matchedField: raw?.matchedField || raw?.matched_field || "title"
+  };
+}
+
+function highlightSuggestionText(value, keyword) {
+  const text = String(value || "");
+  const q = String(keyword || "").trim();
+  if (!q) return escapeHtml(text);
+
+  const index = text.toLocaleLowerCase("vi").indexOf(q.toLocaleLowerCase("vi"));
+  if (index < 0) return escapeHtml(text);
+
+  const before = text.slice(0, index);
+  const match = text.slice(index, index + q.length);
+  const after = text.slice(index + q.length);
+  return `${escapeHtml(before)}<mark>${escapeHtml(match)}</mark>${escapeHtml(after)}`;
+}
+
+function hideSearchSuggestions() {
+  activeSuggestionIndex = -1;
+  searchSuggestions = [];
+  if (searchSuggestBox) {
+    searchSuggestBox.hidden = true;
+    searchSuggestBox.innerHTML = "";
+  }
+}
+
+function renderSearchSuggestions(keyword) {
+  const box = ensureSearchSuggestBox();
+  if (!box) return;
+
+  if (!searchSuggestions.length) {
+    hideSearchSuggestions();
+    return;
+  }
+
+  box.innerHTML = searchSuggestions.map((item, index) => {
+    const activeClass = index === activeSuggestionIndex ? " active" : "";
+    const title = highlightSuggestionText(item.title, keyword);
+    const author = highlightSuggestionText(item.author, keyword);
+    const chapters = item.chapterCount > 0 ? `${item.chapterCount} chương` : "Chưa rõ số chương";
+
+    return `
+      <button
+        class="search-suggest-item${activeClass}"
+        type="button"
+        role="option"
+        aria-selected="${index === activeSuggestionIndex ? "true" : "false"}"
+        data-suggestion-index="${index}"
+      >
+        <span class="search-suggest-title">${title}</span>
+        <span class="search-suggest-meta">${author} • ${chapters}</span>
+      </button>
+    `;
+  }).join("");
+  box.hidden = false;
+}
+
+function getLocalSearchSuggestions(keyword, limit = 8) {
+  const q = String(keyword || "").trim().toLocaleLowerCase("vi");
+  if (q.length < 2) return [];
+
+  return books
+    .filter((book) => {
+      const haystack = [
+        book.title,
+        book.author,
+        Array.isArray(book.tags) ? book.tags.join(" ") : ""
+      ].join(" ").toLocaleLowerCase("vi");
+      return haystack.includes(q);
+    })
+    .sort((a, b) => {
+      const aTitle = (a.title || "").toLocaleLowerCase("vi").startsWith(q) ? 1 : 0;
+      const bTitle = (b.title || "").toLocaleLowerCase("vi").startsWith(q) ? 1 : 0;
+      return bTitle - aTitle || (b.views || 0) - (a.views || 0) || (b.popularity || 0) - (a.popularity || 0);
+    })
+    .slice(0, limit)
+    .map(normalizeSuggestion);
+}
+
+async function loadSearchSuggestions(keyword) {
+  const q = String(keyword || "").trim();
+  if (q.length < 2) {
+    hideSearchSuggestions();
+    return;
+  }
+
+  searchSuggestions = getLocalSearchSuggestions(q);
+  activeSuggestionIndex = searchSuggestions.length ? 0 : -1;
+  renderSearchSuggestions(q);
+
+  try {
+    if (suggestFetchController) {
+      suggestFetchController.abort();
+    }
+
+    suggestFetchController = new AbortController();
+    const res = await fetch(apiUrl(`/api/search/suggest?q=${encodeURIComponent(q)}&limit=8`), {
+      cache: "no-store",
+      signal: suggestFetchController.signal
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error("Suggest API không trả về mảng");
+    }
+
+    const remoteSuggestions = data.map(normalizeSuggestion);
+    if (remoteSuggestions.length) {
+      searchSuggestions = remoteSuggestions;
+    }
+  } catch (err) {
+    if (err.name === "AbortError") return;
+  }
+
+  activeSuggestionIndex = searchSuggestions.length ? 0 : -1;
+  renderSearchSuggestions(q);
+}
+
+function handleSuggestInputDebounced() {
+  clearTimeout(suggestDebounceTimer);
+
+  suggestDebounceTimer = setTimeout(() => {
+    loadSearchSuggestions(searchInput?.value || "");
+  }, 180);
+}
+
+function chooseSearchSuggestion(index) {
+  const suggestion = searchSuggestions[index];
+  if (!suggestion) return;
+
+  if (searchInput) {
+    searchInput.value = suggestion.title;
+  }
+
+  hideSearchSuggestions();
+  goToBook(suggestion.id, 0);
+}
+
+function moveActiveSuggestion(delta) {
+  if (!searchSuggestions.length) return;
+
+  activeSuggestionIndex =
+    (activeSuggestionIndex + delta + searchSuggestions.length) % searchSuggestions.length;
+  renderSearchSuggestions(searchInput?.value || "");
+}
+
+function handleSearchSuggestionKeydown(event) {
+  if (!searchSuggestions.length || !searchSuggestBox || searchSuggestBox.hidden) {
+    return false;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    moveActiveSuggestion(1);
+    return true;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    moveActiveSuggestion(-1);
+    return true;
+  }
+
+  if (event.key === "Enter" && activeSuggestionIndex >= 0) {
+    event.preventDefault();
+    chooseSearchSuggestion(activeSuggestionIndex);
+    return true;
+  }
+
+  if (event.key === "Escape") {
+    hideSearchSuggestions();
+    return true;
+  }
+
+  return false;
+}
 
 async function searchBooksFromAPI(keyword, limit = 80) {
   const q = String(keyword || "").trim();
@@ -1874,7 +2153,7 @@ async function searchBooksFromAPI(keyword, limit = 80) {
 
   try {
     if (booksGrid) {
-      booksGrid.innerHTML = '<div class="empty-state">Äang tÃ¬m truyá»‡n...</div>';
+      booksGrid.innerHTML = '<div class="empty-state">Đang tìm truyện...</div>';
     }
 
     if (searchFetchController) {
@@ -1895,7 +2174,7 @@ async function searchBooksFromAPI(keyword, limit = 80) {
     const data = await res.json();
 
     if (!Array.isArray(data)) {
-      throw new Error("Search API khÃ´ng tráº£ vá» máº£ng");
+      throw new Error("Search API không trả về mảng");
     }
 
     searchResults = data.map((book, index) =>
@@ -1929,7 +2208,7 @@ async function searchBooksFromAPI(keyword, limit = 80) {
   } catch (err) {
     if (err.name === "AbortError") return;
 
-    console.warn("KhÃ´ng táº£i Ä‘Æ°á»£c Search API, dÃ¹ng tÃ¬m kiáº¿m local:", err);
+    console.warn("Không tải được Search API, dùng tìm kiếm local:", err);
     searchModeActive = false;
     searchResults = [];
     currentPage = 1;
@@ -1941,6 +2220,7 @@ function clearSearchModeIfNeeded() {
   const keyword = searchInput?.value?.trim() || "";
   if (keyword) return;
 
+  hideSearchSuggestions();
   searchModeActive = false;
   searchResults = [];
   currentPage = 1;
@@ -1950,6 +2230,7 @@ function clearSearchModeIfNeeded() {
 
 function handleSearchInputDebounced() {
   clearTimeout(searchDebounceTimer);
+  handleSuggestInputDebounced();
 
   searchDebounceTimer = setTimeout(() => {
     const keyword = searchInput?.value?.trim() || "";
@@ -1965,6 +2246,8 @@ function handleSearchInputDebounced() {
 
 async function handleSearchSubmit() {
   clearTimeout(searchDebounceTimer);
+  clearTimeout(suggestDebounceTimer);
+  hideSearchSuggestions();
 
   const keyword = searchInput?.value?.trim() || "";
 
@@ -2060,13 +2343,13 @@ function renderPagination(totalItems) {
     pagination.appendChild(btn);
   }
 
-  // << vá» trang Ä‘áº§u
+  // << về trang đầu
   addBtn("<<", 1, currentPage === 1);
 
-  // < trang trÆ°á»›c
+  // < trang trước
   addBtn("<", currentPage - 1, currentPage === 1);
 
-  // chá»‰ hiá»‡n tá»‘i Ä‘a 4 trang gáº§n currentPage
+  // chỉ hiện tối đa 4 trang gần currentPage
   let startPage = Math.max(1, currentPage - 1);
   let endPage = startPage + 3;
 
@@ -2082,7 +2365,7 @@ function renderPagination(totalItems) {
   // > trang sau
   addBtn(">", currentPage + 1, currentPage === totalPages);
 
-  // >> tá»›i trang cuá»‘i
+  // >> tới trang cuối
   addBtn(">>", totalPages, currentPage === totalPages);
 }
 
@@ -2099,8 +2382,8 @@ function renderBooks() {
 
   if (!filtered.length) {
     booksGrid.innerHTML = showShelfOnly
-      ? '<div class="empty-state">Tá»§ sÃ¡ch cá»§a báº¡n Ä‘ang trá»‘ng. HÃ£y lÆ°u vÃ i truyá»‡n báº¡n thÃ­ch nhÃ©.</div>'
-      : '<div class="empty-state">KhÃ´ng tÃ¬m tháº¥y truyá»‡n phÃ¹ há»£p.</div>';
+      ? '<div class="empty-state">Tủ sách của bạn đang trống. Hãy lưu vài truyện bạn thích nhé.</div>'
+      : '<div class="empty-state">Không tìm thấy truyện phù hợp.</div>';
 
     if (pagination) pagination.innerHTML = "";
     return;
@@ -2108,7 +2391,7 @@ function renderBooks() {
 
   pageItems.forEach((book) => {
     const isSaved = isBookSaved(book.id);
-    const saveText = isSaved ? "ÄÃ£ lÆ°u" : "LÆ°u";
+    const saveText = isSaved ? "Đã lưu" : "Lưu";
     const continueIndex = getReadingProgress(book.id);
     const totalChapters = getBookChapterCount(book);
     const continueChapter = Math.min(continueIndex + 1, Math.max(totalChapters, 1));
@@ -2128,25 +2411,25 @@ function renderBooks() {
       <img
         class="book-thumb"
         src="${escapeHtml(assetUrl(book.cover || "images/default.jpg"))}"
-        alt="BÃ¬a ${escapeHtml(book.title || "")}"
+        alt="Bìa ${escapeHtml(book.title || "")}"
         loading="lazy"
         decoding="async"
         onerror="this.onerror=null;this.src='/images/default.jpg'"
       />
       <div class="book-body">
-        <div class="book-title">${escapeHtml(book.title || "KhÃ´ng cÃ³ tÃªn")}</div>
+        <div class="book-title">${escapeHtml(book.title || "Không có tên")}</div>
         <div class="book-meta">
-          TÃ¡c giáº£: ${escapeHtml(book.author || "ChÆ°a rÃµ")} â€¢ ${totalChapters} chÆ°Æ¡ng
+          Tác giả: ${escapeHtml(book.author || "Chưa rõ")} • ${totalChapters} chương
         </div>
         <div class="tags">${tagsHtml}</div>
         <div class="book-desc">${escapeHtml(book.desc || "")}</div>
         <div class="reading-progress">${escapeHtml(progressText)}</div>
         <div class="book-actions">
-          <button class="read-btn" type="button" data-id="${book.id}">Äá»c ngay</button>
+          <button class="read-btn" type="button" data-id="${book.id}">Đọc ngay</button>
           ${
             showContinueBtn
               ? `<button class="continue-btn" type="button" data-continue="${book.id}">
-                   Äá»c tiáº¿p ${continueChapter}
+                   Đọc tiếp ${continueChapter}
                  </button>`
               : ""
           }
@@ -2184,8 +2467,8 @@ function getChapterMediaUrl(chapter, type = "audio") {
 
 function getChapterMediaHtml(chapter, chapterTitle) {
   const audioUrl = getChapterMediaUrl(chapter, "audio");
-  const mediaTitle = `${currentBook?.title || "Truyá»‡n"} â€¢ ${chapterTitle}`;
-  const note = audioUrl ? "" : "Audio Ä‘ang trong quÃ¡ trÃ¬nh xá»­ lÃ½";
+  const mediaTitle = `${currentBook?.title || "Truyện"} • ${chapterTitle}`;
+  const note = audioUrl ? "" : "Audio đang trong quá trình xử lý";
   const badge = audioUrl ? "Audio" : "Demo audio";
   const audioSrc = audioUrl ? ` src="${escapeHtml(audioUrl)}"` : "";
 
@@ -2193,7 +2476,7 @@ function getChapterMediaHtml(chapter, chapterTitle) {
     <section class="chapter-media ${audioUrl ? "has-media" : "is-demo"}" id="chapterMedia">
       <div class="chapter-media-head">
         <div>
-          <div class="chapter-media-kicker">ðŸŽ§ Nghe audio</div>
+          <div class="chapter-media-kicker">🎧 Nghe audio</div>
           <div class="chapter-media-title" id="chapterMediaTitle">${escapeHtml(mediaTitle)}</div>
         </div>
         <span class="chapter-media-badge" id="chapterMediaBadge">${badge}</span>
@@ -2201,7 +2484,7 @@ function getChapterMediaHtml(chapter, chapterTitle) {
       <audio id="chapterAudio" class="chapter-audio" controls preload="metadata"${audioSrc}></audio>
       <div class="audio-tools">
           <label>
-            Tá»‘c Ä‘á»™ nghe
+            Tốc độ nghe
             <select id="audioSpeedSelect">
               <option value="0.75">0.75x</option>
               <option value="1">1x</option>
@@ -2237,14 +2520,14 @@ function renderChapterChips() {
 
   const chip = document.createElement("span");
   chip.className = "chapter-chip active";
-  chip.textContent = chapter.title || `ChÆ°Æ¡ng ${currentChapterIndex + 1}`;
+  chip.textContent = chapter.title || `Chương ${currentChapterIndex + 1}`;
   chapterList.appendChild(chip);
 
   const listenBtn = document.createElement("button");
   listenBtn.className = "listen-chapter-btn";
   listenBtn.type = "button";
-  listenBtn.textContent = "ðŸŽ§ Nghe truyá»‡n";
-  listenBtn.setAttribute("aria-label", "Chuyá»ƒn xuá»‘ng trÃ¬nh phÃ¡t audio cá»§a chÆ°Æ¡ng hiá»‡n táº¡i");
+  listenBtn.textContent = "🎧 Nghe truyện";
+  listenBtn.setAttribute("aria-label", "Chuyển xuống trình phát audio của chương hiện tại");
   listenBtn.addEventListener("click", scrollToChapterMedia);
   chapterList.appendChild(listenBtn);
 }
@@ -2258,7 +2541,7 @@ function renderChapterSelect() {
   chapters.forEach((chapter, index) => {
     const option = document.createElement("option");
     option.value = String(index);
-    option.textContent = chapter?.title || `ChÆ°Æ¡ng ${index + 1}`;
+    option.textContent = chapter?.title || `Chương ${index + 1}`;
     if (index === currentChapterIndex) option.selected = true;
     chapterSelect.appendChild(option);
   });
@@ -2276,11 +2559,11 @@ function clampChapterIndex(book, chapterIndex) {
 
 function renderEmptyReaderState(book) {
   if (readerMeta) {
-    readerMeta.textContent = `${book.author || "ChÆ°a rÃµ"} â€¢ ChÆ°a cÃ³ chÆ°Æ¡ng`;
+    readerMeta.textContent = `${book.author || "Chưa rõ"} • Chưa có chương`;
   }
 
   if (readerBody) {
-    readerBody.innerHTML = "<p>Truyá»‡n nÃ y hiá»‡n chÆ°a cÃ³ chÆ°Æ¡ng nÃ o.</p>";
+    readerBody.innerHTML = "<p>Truyện này hiện chưa có chương nào.</p>";
   }
 
   if (chapterList) {
@@ -2316,8 +2599,8 @@ async function hydrateServerRenderedChapter() {
   if (!bookSummary) {
     bookSummary = {
       id: bookId,
-      title: readerTitle?.textContent?.trim() || `Truyá»‡n #${bookId}`,
-      author: (readerAuthor?.textContent || "").replace(/^TÃ¡c giáº£:\s*/i, "").trim(),
+      title: readerTitle?.textContent?.trim() || `Truyện #${bookId}`,
+      author: (readerAuthor?.textContent || "").replace(/^Tác giả:\s*/i, "").trim(),
       tags: Array.from(document.querySelectorAll("#readerTags .tag")).map((el) => el.textContent.trim()).filter(Boolean),
       desc: readerDesc?.textContent?.trim() || "",
       cover: readerCover?.getAttribute("src") || "images/default.jpg",
@@ -2333,13 +2616,13 @@ async function hydrateServerRenderedChapter() {
     const fullBookData = await fetchBookDetail(bookSummary);
     currentBook = normalizeBook(fullBookData, bookSummary);
   } catch (err) {
-    console.warn("SSR hydrate: khÃ´ng táº£i Ä‘Æ°á»£c full book, dÃ¹ng dá»¯ liá»‡u HTML hiá»‡n cÃ³:", err);
+    console.warn("SSR hydrate: không tải được full book, dùng dữ liệu HTML hiện có:", err);
     currentBook = normalizeBook(bookSummary, bookSummary);
   }
 
   currentChapterIndex = Math.max(0, chapterNumber - 1);
 
-  // Giá»¯ ná»™i dung SEO Ä‘Ã£ render tá»« backend, chá»‰ hydrate UI Ä‘á»™ng.
+  // Giữ nội dung SEO đã render từ backend, chỉ hydrate UI động.
   if (readerView) {
     readerView.classList.remove("hidden");
     readerView.classList.add("active");
@@ -2354,7 +2637,7 @@ async function hydrateServerRenderedChapter() {
   }
 
   if (readerAuthor && currentBook?.author) {
-    readerAuthor.textContent = `TÃ¡c giáº£: ${currentBook.author || "ChÆ°a rÃµ"}`;
+    readerAuthor.textContent = `Tác giả: ${currentBook.author || "Chưa rõ"}`;
   }
 
   if (readerTags && Array.isArray(currentBook?.tags)) {
@@ -2428,8 +2711,8 @@ function openChapter(chapterIndex) {
   const chapter = chapters[currentChapterIndex];
 
   if (!chapter || typeof chapter !== "object") {
-    readerMeta.textContent = `${currentBook.author || "ChÆ°a rÃµ"} â€¢ ChÆ°Æ¡ng khÃ´ng há»£p lá»‡`;
-    readerBody.innerHTML = "<p>ChÆ°Æ¡ng nÃ y bá»‹ lá»—i dá»¯ liá»‡u.</p>" + getChapterMediaHtml({}, "ChÆ°Æ¡ng lá»—i");
+    readerMeta.textContent = `${currentBook.author || "Chưa rõ"} • Chương không hợp lệ`;
+    readerBody.innerHTML = "<p>Chương này bị lỗi dữ liệu.</p>" + getChapterMediaHtml({}, "Chương lỗi");
 
     renderChapterChips();
     renderChapterSelect();
@@ -2439,8 +2722,8 @@ function openChapter(chapterIndex) {
     return;
   }
 
-  const chapterTitle = chapter.title || `ChÆ°Æ¡ng ${currentChapterIndex + 1}`;
-  readerMeta.textContent = `${currentBook.author || "ChÆ°a rÃµ"} â€¢ ${chapterTitle}`;
+  const chapterTitle = chapter.title || `Chương ${currentChapterIndex + 1}`;
+  readerMeta.textContent = `${currentBook.author || "Chưa rõ"} • ${chapterTitle}`;
 
   const contentArray = Array.isArray(chapter.content)
     ? chapter.content
@@ -2450,7 +2733,7 @@ function openChapter(chapterIndex) {
 
   const contentHtml = contentArray.length
     ? contentArray.map((p) => `<p>${escapeHtml(p)}</p>`).join("")
-    : "<p>ChÆ°Æ¡ng nÃ y chÆ°a cÃ³ ná»™i dung.</p>";
+    : "<p>Chương này chưa có nội dung.</p>";
 
   readerBody.innerHTML = contentHtml + getChapterMediaHtml(chapter, chapterTitle);
   setupChapterAudioPlayer();
@@ -2503,10 +2786,10 @@ async function fetchBookDetail(bookSummary, signal) {
     setBookDetailCache(bookSummary.id, data);
     return data;
   } catch (apiError) {
-    // Fallback giá»¯ web cÅ© váº«n cháº¡y náº¿u backend local chÆ°a báº­t.
+    // Fallback giữ web cũ vẫn chạy nếu backend local chưa bật.
     if (!bookSummary.file) throw apiError;
 
-    console.warn("KhÃ´ng táº£i Ä‘Æ°á»£c tá»« API, fallback sang JSON tÄ©nh:", apiError);
+    console.warn("Không tải được từ API, fallback sang JSON tĩnh:", apiError);
     const fallbackRes = await fetch(bookSummary.file, { signal, cache: "force-cache" });
     if (!fallbackRes.ok) {
       throw new Error(`JSON HTTP ${fallbackRes.status}`);
@@ -2530,7 +2813,7 @@ async function openReader(bookId, chapterIndex = null) {
 
   try {
     if (readerBody) {
-      readerBody.innerHTML = '<div class="empty-state">Äang táº£i truyá»‡n...</div>';
+      readerBody.innerHTML = '<div class="empty-state">Đang tải truyện...</div>';
     }
 
     const fullBookData = await fetchBookDetail(bookSummary, signal);
@@ -2538,10 +2821,10 @@ async function openReader(bookId, chapterIndex = null) {
     currentBook = fullBook;
 
     if (readerTitle) {
-      readerTitle.textContent = fullBook.title || "KhÃ´ng cÃ³ tÃªn";
+      readerTitle.textContent = fullBook.title || "Không có tên";
     }
 
-    document.title = `${fullBook.title || "KhÃ´ng cÃ³ tÃªn"} | TruyenFullvn`;
+    document.title = `${fullBook.title || "Không có tên"} | TruyenFullvn`;
 
     // Update meta tags for SEO
     updateMetaTags(fullBook);
@@ -2549,7 +2832,7 @@ async function openReader(bookId, chapterIndex = null) {
     if (readerCover) {
       readerCover.onerror = null;
       readerCover.src = fullBook.cover || "images/default.jpg";
-      readerCover.alt = `BÃ¬a ${fullBook.title || ""}`;
+      readerCover.alt = `Bìa ${fullBook.title || ""}`;
       readerCover.loading = "lazy";
       readerCover.decoding = "async";
       readerCover.onerror = () => {
@@ -2559,7 +2842,7 @@ async function openReader(bookId, chapterIndex = null) {
     }
 
     if (readerAuthor) {
-      readerAuthor.textContent = `TÃ¡c giáº£: ${fullBook.author || "ChÆ°a rÃµ"}`;
+      readerAuthor.textContent = `Tác giả: ${fullBook.author || "Chưa rõ"}`;
     }
 
     if (readerTags) {
@@ -2605,13 +2888,13 @@ async function openReader(bookId, chapterIndex = null) {
     openChapter(finalChapterIndex);
   } catch (error) {
     if (error.name === "AbortError") return;
-    console.error("KhÃ´ng táº£i Ä‘Æ°á»£c file truyá»‡n:", error);
-    alert("KhÃ´ng má»Ÿ Ä‘Æ°á»£c truyá»‡n nÃ y.");
+    console.error("Không tải được file truyện:", error);
+    alert("Không mở được truyện này.");
   }
 }
 
 function backHome() {
-  document.title = "TruyenFullvn - Äá»c truyá»‡n online miá»…n phÃ­";
+  document.title = "TruyenFullvn - Đọc truyện online miễn phí";
   clearBookRoute();
   if (readerView) {
     readerView.classList.remove("active");
@@ -2655,19 +2938,19 @@ function goHome(e) {
 }
 
 function resetHomeMetaTags() {
-  document.title = "TruyenFullvn - Äá»c truyá»‡n online miá»…n phÃ­";
+  document.title = "TruyenFullvn - Đọc truyện online miễn phí";
 
-  updateOrCreateMeta('name', 'description', 'TruyenFullvn lÃ  kho truyá»‡n online miá»…n phÃ­, Ä‘á»c truyá»‡n ngÃ´n tÃ¬nh, hiá»‡n Ä‘áº¡i, cá»• Ä‘áº¡i, xuyÃªn khÃ´ng, sá»§ng vÃ  chá»¯a lÃ nh Ä‘Æ°á»£c cáº­p nháº­t nhanh.');
-  updateOrCreateMeta('name', 'keywords', 'TruyenFullvn, Ä‘á»c truyá»‡n online, truyá»‡n ngÃ´n tÃ¬nh, truyá»‡n hiá»‡n Ä‘áº¡i, truyá»‡n cá»• Ä‘áº¡i, truyá»‡n xuyÃªn khÃ´ng, truyá»‡n miá»…n phÃ­');
+  updateOrCreateMeta('name', 'description', 'TruyenFullvn là kho truyện online miễn phí, đọc truyện ngôn tình, hiện đại, cổ đại, xuyên không, sủng và chữa lành được cập nhật nhanh.');
+  updateOrCreateMeta('name', 'keywords', 'TruyenFullvn, đọc truyện online, truyện ngôn tình, truyện hiện đại, truyện cổ đại, truyện xuyên không, truyện miễn phí');
 
-  updateOrCreateMeta('property', 'og:title', 'TruyenFullvn - Äá»c truyá»‡n online miá»…n phÃ­');
-  updateOrCreateMeta('property', 'og:description', 'Kho truyá»‡n online miá»…n phÃ­, nhiá»u thá»ƒ loáº¡i háº¥p dáº«n, giao diá»‡n Ä‘á»c thoáº£i mÃ¡i trÃªn Ä‘iá»‡n thoáº¡i vÃ  mÃ¡y tÃ­nh.');
+  updateOrCreateMeta('property', 'og:title', 'TruyenFullvn - Đọc truyện online miễn phí');
+  updateOrCreateMeta('property', 'og:description', 'Kho truyện online miễn phí, nhiều thể loại hấp dẫn, giao diện đọc thoải mái trên điện thoại và máy tính.');
   updateOrCreateMeta('property', 'og:url', 'https://truyenfullvn.org/');
   updateOrCreateMeta('property', 'og:image', 'https://truyenfullvn.org/images/default.jpg');
   updateOrCreateMeta('property', 'og:type', 'website');
 
-  updateOrCreateMeta('name', 'twitter:title', 'TruyenFullvn - Äá»c truyá»‡n online miá»…n phÃ­');
-  updateOrCreateMeta('name', 'twitter:description', 'Kho truyá»‡n online miá»…n phÃ­, nhiá»u thá»ƒ loáº¡i háº¥p dáº«n, cáº­p nháº­t nhanh.');
+  updateOrCreateMeta('name', 'twitter:title', 'TruyenFullvn - Đọc truyện online miễn phí');
+  updateOrCreateMeta('name', 'twitter:description', 'Kho truyện online miễn phí, nhiều thể loại hấp dẫn, cập nhật nhanh.');
   updateOrCreateMeta('name', 'twitter:image', 'https://truyenfullvn.org/images/default.jpg');
   updateOrCreateMeta('name', 'twitter:card', 'summary_large_image');
 
@@ -2872,7 +3155,7 @@ async function handleRoute() {
     return;
   }
 
-  // KhÃ´ng cÃ³ route truyá»‡n thÃ¬ giá»¯ trang chá»§.
+  // Không có route truyện thì giữ trang chủ.
   if (readerView && readerView.classList.contains("active")) {
     backHome();
   }
@@ -2907,7 +3190,7 @@ function renderFeaturedBook() {
   if (featuredCover) {
     featuredCover.onerror = null;
     featuredCover.src = featuredBook.cover || "images/default.jpg";
-    featuredCover.alt = `BÃ¬a ${featuredBook.title || "truyá»‡n Ä‘á» cá»­"}`;
+    featuredCover.alt = `Bìa ${featuredBook.title || "truyện đề cử"}`;
     featuredCover.loading = "lazy";
     featuredCover.decoding = "async";
     featuredCover.onerror = () => {
@@ -2917,15 +3200,15 @@ function renderFeaturedBook() {
   }
 
   if (featuredTitle) {
-    featuredTitle.textContent = featuredBook.title || "Truyá»‡n Ä‘á» cá»­ hÃ´m nay";
+    featuredTitle.textContent = featuredBook.title || "Truyện đề cử hôm nay";
   }
 
   if (featuredDesc) {
     featuredDesc.textContent =
       featuredBook.desc ||
       (Array.isArray(featuredBook.tags) && featuredBook.tags.length
-        ? `Thá»ƒ loáº¡i: ${featuredBook.tags.join(", ")}`
-        : "Má»™t cÃ¢u chuyá»‡n ngáº«u nhiÃªn Ä‘ang chá» báº¡n khÃ¡m phÃ¡.");
+        ? `Thể loại: ${featuredBook.tags.join(", ")}`
+        : "Một câu chuyện ngẫu nhiên đang chờ bạn khám phá.");
   }
 }
 
@@ -2962,7 +3245,7 @@ async function fetchRankingBooks(limit = 5) {
       );
     }
   } catch (err) {
-    console.warn("KhÃ´ng táº£i Ä‘Æ°á»£c ranking API, dÃ¹ng ranking local:", err);
+    console.warn("Không tải được ranking API, dùng ranking local:", err);
   }
 
   const validBooks = books.filter((book) => Number(book.id));
@@ -2978,7 +3261,7 @@ async function renderRandomRankings() {
   if (rankingList) {
     rankingList.innerHTML = rankingBooks
       .map((book) => `
-        <li data-book-id="${escapeHtml(book.id)}">${escapeHtml(book.title || "KhÃ´ng cÃ³ tÃªn")}</li>
+        <li data-book-id="${escapeHtml(book.id)}">${escapeHtml(book.title || "Không có tên")}</li>
       `)
       .join("");
   }
@@ -2987,7 +3270,7 @@ async function renderRandomRankings() {
     mobileRankingMenu.innerHTML = rankingBooks
       .map((book) => `
         <button class="mobile-subitem" type="button" data-ranking-book="${escapeHtml(book.id)}">
-          ${escapeHtml(book.title || "KhÃ´ng cÃ³ tÃªn")}
+          ${escapeHtml(book.title || "Không có tên")}
         </button>
       `)
       .join("");
@@ -3007,10 +3290,10 @@ async function loadBooks() {
     const cachedBooks = getCachedBooksIndex();
     if (cachedBooks) {
       data = cachedBooks;
-      console.log(`ÄÃ£ táº£i ${data.length} truyá»‡n tá»« cache local`);
+      console.log(`Đã tải ${data.length} truyện từ cache local`);
     }
 
-    // Æ¯u tiÃªn nguá»“n má»›i: FastAPI + PostgreSQL
+    // Ưu tiên nguồn mới: FastAPI + PostgreSQL
     try {
       if (!data.length) {
       const apiRes = await fetch(apiUrl("/api/books?skip=0&limit=10000"), {
@@ -3022,17 +3305,17 @@ async function loadBooks() {
         if (Array.isArray(apiData)) {
           data = apiData;
           loadedFromApi = true;
-          console.log(`ÄÃ£ táº£i ${data.length} truyá»‡n tá»« FastAPI`);
+          console.log(`Đã tải ${data.length} truyện từ FastAPI`);
         }
       } else {
-        console.warn(`API /api/books tráº£ HTTP ${apiRes.status}`);
+        console.warn(`API /api/books trả HTTP ${apiRes.status}`);
       }
       }
     } catch (apiError) {
-      console.warn("KhÃ´ng káº¿t ná»‘i Ä‘Æ°á»£c FastAPI, fallback sang JSON tÄ©nh:", apiError);
+      console.warn("Không kết nối được FastAPI, fallback sang JSON tĩnh:", apiError);
     }
 
-    // Fallback: giá»¯ cÆ¡ cháº¿ cÅ© Ä‘á»c books-index-1.json...books-index-10.json
+    // Fallback: giữ cơ chế cũ đọc books-index-1.json...books-index-10.json
     if (!loadedFromApi && !data.length) {
       let loadedFromChunks = false;
 
@@ -3067,14 +3350,14 @@ async function loadBooks() {
               res = currentRes;
               break;
             }
-            lastError = new Error(`${path} â†’ HTTP ${currentRes.status}`);
+            lastError = new Error(`${path} → HTTP ${currentRes.status}`);
           } catch (err) {
             lastError = err;
           }
         }
 
         if (!res) {
-          throw lastError || new Error("KhÃ´ng tÃ¬m tháº¥y books-index");
+          throw lastError || new Error("Không tìm thấy books-index");
         }
 
         data = await res.json();
@@ -3082,7 +3365,7 @@ async function loadBooks() {
     }
 
     if (!Array.isArray(data)) {
-      throw new Error("Nguá»“n dá»¯ liá»‡u truyá»‡n khÃ´ng pháº£i máº£ng");
+      throw new Error("Nguồn dữ liệu truyện không phải mảng");
     }
 
     setCachedBooksIndex(data);
@@ -3115,11 +3398,11 @@ async function loadBooks() {
     await openRouteFromCurrentUrl();
     await hydrateServerRenderedChapter();
   } catch (error) {
-    console.error("KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u truyá»‡n:", error);
+    console.error("Không tải được dữ liệu truyện:", error);
 
     if (booksGrid) {
       booksGrid.innerHTML =
-        '<div class="empty-state">KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u truyá»‡n. HÃ£y kiá»ƒm tra backend FastAPI hoáº·c cháº¡y web báº±ng local server.</div>';
+        '<div class="empty-state">Không tải được dữ liệu truyện. Hãy kiểm tra backend FastAPI hoặc chạy web bằng local server.</div>';
     }
 
     if (pagination) {
@@ -3475,8 +3758,8 @@ function bindEvents() {
 
         alert(
           saved
-            ? `ÄÃ£ lÆ°u "${book.title}" vÃ o tá»§ sÃ¡ch.`
-            : `ÄÃ£ bá» "${book.title}" khá»i tá»§ sÃ¡ch.`
+            ? `Đã lưu "${book.title}" vào tủ sách.`
+            : `Đã bỏ "${book.title}" khỏi tủ sách.`
         );
         return;
       }
@@ -3496,8 +3779,18 @@ function bindEvents() {
 
   if (searchInput) {
     searchInput.addEventListener("input", handleSearchInputDebounced);
+    searchInput.addEventListener("focus", () => {
+      if ((searchInput.value || "").trim().length >= 2) {
+        handleSuggestInputDebounced();
+      }
+    });
+    searchInput.addEventListener("blur", () => {
+      setTimeout(hideSearchSuggestions, 120);
+    });
 
     searchInput.addEventListener("keydown", async (e) => {
+      if (handleSearchSuggestionKeydown(e)) return;
+
       if (e.key === "Enter") {
         e.preventDefault();
         await handleSearchSubmit();
@@ -3617,8 +3910,8 @@ function bindEvents() {
 
       alert(
         saved
-          ? `ÄÃ£ lÆ°u "${currentBook.title}" vÃ o tá»§ sÃ¡ch.`
-          : `ÄÃ£ bá» "${currentBook.title}" khá»i tá»§ sÃ¡ch.`
+          ? `Đã lưu "${currentBook.title}" vào tủ sách.`
+          : `Đã bỏ "${currentBook.title}" khỏi tủ sách.`
       );
     });
   }
@@ -3775,7 +4068,12 @@ function initDomRefs() {
   continueToggleBtn = $("continueToggleBtn");
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+let appBootstrapped = false;
+
+function bootApp() {
+  if (appBootstrapped) return;
+  appBootstrapped = true;
+
   const savedShelfRaw = localStorage.getItem(STORAGE_KEYS.shelf);
   if (savedShelfRaw === null || savedShelfRaw === "null") {
     localStorage.setItem(STORAGE_KEYS.shelf, JSON.stringify([]));
@@ -3808,7 +4106,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
   lastScrollY = window.scrollY || 0;
   handleMobileTopbarScroll();
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootApp);
+} else {
+  bootApp();
+}
 
 function setupChapterAudioPlayer() {
   setupAudioPlayer(STORAGE_KEYS);

@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+.DS_Store
+.env
+.truyen-old
+.chrome-test-profile*
+.shot*.png
+.server.*.log
+node_modules
+postgres_data
+redis_data

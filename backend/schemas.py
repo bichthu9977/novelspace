@@ -32,6 +32,19 @@ class BookResponse(BaseModel):
         from_attributes = True
 
 
+class SearchSuggestionResponse(BaseModel):
+    id: int
+    title: str
+    author: Optional[str] = ""
+    seo_url: Optional[str] = ""
+    cover: Optional[str] = ""
+    chapter_count: int = 0
+    matched_field: str = "title"
+
+    class Config:
+        from_attributes = True
+
+
 class BookDetailResponse(BookResponse):
     chapters: List[ChapterResponse] = []
 

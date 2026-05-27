@@ -233,6 +233,7 @@ img {
   min-width: 240px;
   display: flex;
   gap: 10px;
+  position: relative;
   transition:
     opacity 0.22s ease,
     transform 0.22s ease,
@@ -281,6 +282,63 @@ img {
 .page-btn:hover,
 .chapter-chip:hover {
   transform: translateY(-1px);
+}
+
+.search-suggest-box {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 16px 38px rgba(75, 45, 36, 0.16);
+}
+
+.search-suggest-box[hidden] {
+  display: none;
+}
+
+.search-suggest-item {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.search-suggest-item:hover,
+.search-suggest-item.active {
+  background: var(--surface);
+}
+
+.search-suggest-title {
+  color: var(--primary-dark);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.search-suggest-title mark,
+.search-suggest-meta mark {
+  background: #ffe8c7;
+  color: inherit;
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.search-suggest-meta {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.3;
 }
 
 .nav {
@@ -1011,6 +1069,7 @@ body.reader-mobile.topbar-hidden .topbar {
   padding: 8px 12px;
   border-radius: 999px;
   cursor: pointer;
+  font-weight: 600;
 }
 
 .chapter-chip.active {
@@ -1023,7 +1082,7 @@ body.reader-mobile.topbar-hidden .topbar {
   background: #fff7ed;
   color: var(--primary-dark);
   border-color: rgba(138, 61, 47, 0.28);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .listen-chapter-btn:hover {
@@ -1065,14 +1124,14 @@ body.reader-mobile.topbar-hidden .topbar {
 .chapter-media-kicker {
   font-size: 14px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
 .chapter-media-title {
   color: var(--primary-dark);
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 650;
   line-height: 1.35;
 }
 
@@ -1083,7 +1142,7 @@ body.reader-mobile.topbar-hidden .topbar {
   background: var(--primary);
   color: #fff;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 650;
 }
 
 .chapter-audio {
@@ -1745,6 +1804,9 @@ body.reader-mobile.topbar-hidden .topbar {
   color: var(--primary-dark);
   margin-bottom: 8px;
   padding-right: 34px;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 700;
 }
 
 .auth-desc {
@@ -1754,7 +1816,7 @@ body.reader-mobile.topbar-hidden .topbar {
 
 .auth-label {
   display: block;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--primary-dark);
   margin-top: 12px;
   margin-bottom: 6px;
@@ -1792,6 +1854,7 @@ body.reader-mobile.topbar-hidden .topbar {
 .auth-action-btn {
   width: 100%;
   margin-top: 12px;
+  font-weight: 600;
 }
 
 .auth-message {
@@ -1847,7 +1910,7 @@ body.reader-mobile.topbar-hidden .topbar {
   gap: 6px;
   color: var(--muted);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .audio-tools select {
@@ -2055,7 +2118,7 @@ body.reader-mobile.topbar-hidden .topbar {
   color: var(--primary-dark);
   padding: 10px 12px;
   cursor: pointer;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .auth-mode-btn.active {
@@ -2771,7 +2834,7 @@ body.reader-mobile.topbar-hidden .topbar {
   border: 0;
   background: transparent;
   color: var(--primary-dark);
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
   padding: 6px 8px;
   border-radius: 999px;

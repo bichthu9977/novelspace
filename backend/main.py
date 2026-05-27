@@ -54,6 +54,7 @@ from schemas import (
     BookUpdate,
     ChapterUpdate,
     NotificationResponse,
+    SearchSuggestionResponse,
 )
 
 Base.metadata.create_all(bind=engine)
@@ -273,6 +274,58 @@ def query_search_books(db: Session, keyword: str, limit: int):
     ).limit(limit).all()
 
 
+def query_search_suggestions(db: Session, keyword: str, limit: int):
+    safe_limit = min(max(int(limit or 8), 1), 12)
+    keyword = (keyword or "").strip()
+
+    if len(keyword) < 2:
+        return []
+
+    search_text = func.unaccent(
+        func.concat(
+            func.coalesce(Book.title, ""),
+            " ",
+            func.coalesce(Book.author, ""),
+            " ",
+            func.coalesce(Book.desc, "")
+        )
+    )
+    query = func.plainto_tsquery("simple", func.unaccent(keyword))
+    vector = func.to_tsvector("simple", search_text)
+    rank = func.ts_rank_cd(vector, query)
+    like_keyword = f"%{keyword}%"
+
+    results = db.query(Book).filter(
+        or_(
+            vector.op("@@")(query),
+            Book.title.ilike(like_keyword),
+            Book.author.ilike(like_keyword),
+        )
+    ).order_by(
+        rank.desc(),
+        Book.views.desc(),
+        Book.popularity.desc(),
+        Book.id.desc()
+    ).limit(safe_limit).all()
+
+    suggestions = []
+    keyword_lower = keyword.lower()
+    for book in results:
+        author = book.author or ""
+        matched_field = "author" if keyword_lower in author.lower() else "title"
+        suggestions.append({
+            "id": book.id,
+            "title": book.title or "",
+            "author": author,
+            "seo_url": book.seo_url or f"book-{book.id}",
+            "cover": book.cover or "",
+            "chapter_count": book.chapter_count or 0,
+            "matched_field": matched_field,
+        })
+
+    return suggestions
+
+
 def query_related_books(db: Session, book: Book, limit: int):
     tags = set(book.tags or [])
     candidates = query_ranked_books(db, max(limit * 8, 80))
@@ -406,6 +459,24 @@ def search_books(
         CACHE_SEARCH_TTL,
         lambda: serialize_books(query_search_books(db, keyword, limit)),
     )
+
+
+@app.get("/api/search/suggest", response_model=list[SearchSuggestionResponse])
+def suggest_search_books(
+    q: str = "",
+    limit: int = 8,
+    db: Session = Depends(get_db)
+):
+    keyword = q.strip()
+    safe_limit = min(max(int(limit or 8), 1), 12)
+    cache_key = make_cache_key("search", kind="suggest", q=keyword, limit=safe_limit)
+
+    return get_or_set_json(
+        cache_key,
+        CACHE_SEARCH_TTL,
+        lambda: query_search_suggestions(db, keyword, safe_limit),
+    )
+
 
 @app.get("/api/ranking", response_model=list[BookResponse])
 def get_ranking(limit: int = 10, db: Session = Depends(get_db)):
