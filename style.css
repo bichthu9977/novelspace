@@ -46,6 +46,8 @@ body.theme-sepia {
 
 html {
   scroll-behavior: smooth;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -53,6 +55,9 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.5;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 button,
@@ -83,6 +88,9 @@ img {
   box-shadow: var(--shadow);
   position: sticky;
   top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
   z-index: 100;
   transition:
     transform 0.3s ease,
@@ -929,11 +937,13 @@ body.reader-mobile.topbar-hidden .topbar {
 /* ===== READER ===== */
 .reader-shell {
   display: none;
+  width: 100%;
   padding: 0 20px 40px;
   max-width: calc(var(--reader-width) + 220px);
   margin: 0 auto;
   gap: 18px;
   grid-template-columns: 1fr 180px;
+  min-width: 0;
 }
 
 .reader-shell.active {
@@ -942,8 +952,10 @@ body.reader-mobile.topbar-hidden .topbar {
 
 .reader-panel {
   padding: 26px 30px 30px;
+  width: 100%;
   max-width: var(--reader-width);
   margin: 24px auto 0;
+  min-width: 0;
 }
 
 .reader-top {
@@ -1335,6 +1347,7 @@ body.reader-mobile.topbar-hidden .topbar {
   .reader-shell,
   .reader-shell.active {
     grid-template-columns: 1fr;
+    max-width: 100%;
   }
 
   .floating-tools {
@@ -1400,6 +1413,7 @@ body.reader-mobile.topbar-hidden .topbar {
 
   .reader-panel {
     padding: 20px 18px 24px;
+    max-width: 100%;
   }
 
   .reader-body {

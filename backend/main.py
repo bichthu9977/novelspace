@@ -1668,7 +1668,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
   <meta name="twitter:description" content="{_safe_text(meta_description)}" />
   <meta name="twitter:image" content="{_safe_text(cover_url)}" />
   <link rel="icon" href="/favicon.ico" />
-  <link rel="stylesheet" href="/style.css?v=20260527-topbar-hide" />
+  <link rel="stylesheet" href="/style.css?v=20260528-tablet-width" />
   <script>window.TRUYENFULLVN_PAGE = {json.dumps(page_data, ensure_ascii=False)};</script>
   <script type="application/ld+json">{json.dumps(structured_data, ensure_ascii=False)}</script>
 </head>
@@ -1827,7 +1827,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
       <div id="authMessage" class="auth-message"></div>
     </div>
   </div>
-  <script src="/script.js?v=20260527-topbar-hide"></script>
+  <script src="/script.js?v=20260528-tablet-width"></script>
 </body>
 </html>"""
 
