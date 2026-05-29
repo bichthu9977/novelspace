@@ -1,4 +1,8 @@
 /* ===== FULL STYLE.CSS - FIXED MOBILE BRAND + TRUYENFULLVN UI ===== */
+
+/* Ẩn homepage ngay lập tức khi đang khôi phục direct URL (GitHub Pages redirect trick) */
+html.js-redirect-loading #homeView { display: none; }
+
 :root {
   --bg: #f5f1ea;
   --card: #ffffff;
