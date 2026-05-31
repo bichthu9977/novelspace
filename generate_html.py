@@ -169,7 +169,16 @@ def generate_html_template(book):
               <option value="title">Sắp xếp: A → Z</option>
               <option value="chapters">Sắp xếp: Tổng số chương</option>
             </select>
-            <input id="authorFilter" type="text" placeholder="Lọc theo tác giả" />
+            <input
+              id="authorFilter"
+              name="novel_author_filter"
+              type="search"
+              placeholder="Lọc theo tác giả"
+              autocomplete="new-password"
+              autocapitalize="none"
+              spellcheck="false"
+              readonly
+            />
           </div>
           <div class="chip-group" id="chipGroup"></div>
         </div>

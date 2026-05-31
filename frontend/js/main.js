@@ -2284,7 +2284,40 @@ function clearTransientSearchState() {
   searchResults = [];
 }
 
+function isLikelyEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
+}
+
+function clearAutofilledAuthorEmail() {
+  if (!authorFilter) return;
+
+  const value = authorFilter.value.trim();
+  if (!isLikelyEmail(value)) return;
+
+  authorFilter.value = "";
+}
+
+function setupAuthorFilterInput() {
+  if (!authorFilter) return;
+
+  authorFilter.setAttribute("name", "novel_author_filter");
+  authorFilter.setAttribute("autocomplete", "new-password");
+  authorFilter.setAttribute("autocapitalize", "none");
+  authorFilter.setAttribute("spellcheck", "false");
+  authorFilter.readOnly = true;
+
+  const enableAuthorFilter = () => {
+    authorFilter.readOnly = false;
+    clearAutofilledAuthorEmail();
+  };
+
+  authorFilter.addEventListener("focus", enableAuthorFilter);
+  authorFilter.addEventListener("pointerdown", enableAuthorFilter);
+}
+
 function hasVisibleBookFilter() {
+  clearAutofilledAuthorEmail();
+
   const keyword = searchInput?.value?.trim() || "";
   const authorKeyword = authorFilter?.value?.trim() || "";
 
@@ -2329,6 +2362,7 @@ async function handleSearchSubmit() {
 
 
 function getFilteredBooks() {
+  clearAutofilledAuthorEmail();
   clearTransientSearchState();
 
   let filtered = searchModeActive ? [...searchResults] : [...books];
@@ -4243,6 +4277,8 @@ function initDomRefs() {
   continueReadingGrid = $("continueReadingGrid");
   continueRefreshBtn = $("continueRefreshBtn");
   continueToggleBtn = $("continueToggleBtn");
+
+  setupAuthorFilterInput();
 }
 
 let appBootstrapped = false;

@@ -1830,7 +1830,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
       <div id="authMessage" class="auth-message"></div>
     </div>
   </div>
-  <script src="/script.js?v=20260531-featured-fallback"></script>
+  <script src="/script.js?v=20260601-author-autofill-2"></script>
 </body>
 </html>"""
 
