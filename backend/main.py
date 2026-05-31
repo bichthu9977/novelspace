@@ -3,7 +3,7 @@ import json
 import logging
 from html import escape
 from pathlib import Path
-from fastapi import Header, Request
+from fastapi import Header, Request, Response
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -847,7 +847,7 @@ def delete_chapter(
 
 @app.post("/api/register", response_model=TokenResponse)
 @limiter.limit(REGISTER_RATE_LIMIT)
-def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
+def register(request: Request, response: Response, user_data: UserCreate, db: Session = Depends(get_db)):
     email = (user_data.email or "").strip().lower()
 
     if not email:
@@ -885,7 +885,7 @@ def register(request: Request, user_data: UserCreate, db: Session = Depends(get_
 
 @app.post("/api/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_RATE_LIMIT)
-def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, response: Response, user_data: UserLogin, db: Session = Depends(get_db)):
     email = (user_data.email or "").strip().lower()
     user = db.query(User).filter(User.email == email).first()
 
@@ -975,6 +975,7 @@ def mark_all_notifications_read(
 @limiter.limit(BOOKMARK_RATE_LIMIT)
 def add_bookmark(
     request: Request,
+    response: Response,
     bookmark_data: BookmarkCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1048,6 +1049,7 @@ def get_bookmarks(
 @limiter.limit(BOOKMARK_RATE_LIMIT)
 def delete_bookmark(
     request: Request,
+    response: Response,
     book_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1147,6 +1149,7 @@ def get_book_comments(
 @limiter.limit(COMMENT_RATE_LIMIT)
 def create_book_comment(
     request: Request,
+    response: Response,
     comment_data: CommentCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
