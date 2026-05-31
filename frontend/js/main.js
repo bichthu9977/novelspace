@@ -2276,6 +2276,14 @@ function clearSearchModeIfNeeded() {
   renderBooks();
 }
 
+function clearTransientSearchState() {
+  const keyword = searchInput?.value?.trim() || "";
+  if (keyword || !searchModeActive) return;
+
+  searchModeActive = false;
+  searchResults = [];
+}
+
 function handleSearchInputDebounced() {
   clearTimeout(searchDebounceTimer);
   handleSuggestInputDebounced();
@@ -2309,6 +2317,8 @@ async function handleSearchSubmit() {
 
 
 function getFilteredBooks() {
+  clearTransientSearchState();
+
   let filtered = searchModeActive ? [...searchResults] : [...books];
 
   if (showShelfOnly) {
@@ -3563,8 +3573,10 @@ function bindEvents() {
     continueToggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      clearTransientSearchState();
       continueExpanded = !continueExpanded;
       renderContinueReadingPanel();
+      renderBooks();
     });
   }
 
