@@ -4267,30 +4267,6 @@ function setupChapterAudioPlayer() {
 
 
 
-// Robust delegated handler for Continue Reading controls.
-// This catches the click even if the panel is re-rendered or refs were not ready.
-document.addEventListener("click", (e) => {
-  const toggleBtn = e.target.closest("#continueToggleBtn");
-  if (toggleBtn) {
-    e.preventDefault();
-    continueExpanded = !continueExpanded;
-    renderContinueReadingPanel();
-    return;
-  }
-
-  const continueCard = e.target.closest("[data-continue-book]");
-  if (continueCard) {
-    e.preventDefault();
-    goToBook(
-      continueCard.dataset.continueBook,
-      Number(continueCard.dataset.continueChapter || 0)
-    );
-  }
-});
-
-
-
-
 window.addEventListener("load", () => {
   setTimeout(async () => {
     updateAuthUI();
