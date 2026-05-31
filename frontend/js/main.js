@@ -3562,6 +3562,7 @@ function bindEvents() {
   if (continueToggleBtn) {
     continueToggleBtn.addEventListener("click", (e) => {
       e.preventDefault();
+      e.stopPropagation();
       continueExpanded = !continueExpanded;
       renderContinueReadingPanel();
     });
@@ -3577,6 +3578,7 @@ function bindEvents() {
       if (!btn) return;
 
       e.preventDefault();
+      e.stopPropagation();
       goToBook(btn.dataset.continueBook, Number(btn.dataset.continueChapter || 0));
     });
   }
