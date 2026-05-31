@@ -2284,6 +2284,18 @@ function clearTransientSearchState() {
   searchResults = [];
 }
 
+function hasVisibleBookFilter() {
+  const keyword = searchInput?.value?.trim() || "";
+  const authorKeyword = authorFilter?.value?.trim() || "";
+
+  return Boolean(
+    showShelfOnly ||
+    keyword ||
+    authorKeyword ||
+    activeChip !== "all"
+  );
+}
+
 function handleSearchInputDebounced() {
   clearTimeout(searchDebounceTimer);
   handleSuggestInputDebounced();
@@ -2356,6 +2368,12 @@ function getFilteredBooks() {
     filtered = filtered.filter(
       (book) => Array.isArray(book.tags) && book.tags.includes(activeChip)
     );
+  }
+
+  if (!filtered.length && books.length && !hasVisibleBookFilter()) {
+    searchModeActive = false;
+    searchResults = [];
+    filtered = [...books];
   }
 
   if (sortValue === "title") {
