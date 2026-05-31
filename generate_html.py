@@ -142,8 +142,8 @@ def generate_html_template(book):
       <section class="content">
         <div class="panel hero">
           <div class="hero-copy">
-            <h1>Kho truyện online theo phong cách cổ điển</h1>
-            <p>Mở truyện. Đọc. Và quên mất thời gian.</p>
+            <h1>Kho truyện Audio miễn phí.</h1>
+            <p>Mở truyện. Đọc. Nghe. Và quên mất thời gian.</p>
             <div class="hero-actions">
               <button class="solid-btn" id="scrollBooksBtn" type="button">Xem truyện nổi bật</button>
               <button class="ghost-btn" id="openFeaturedBtn" type="button">Đọc thử ngay</button>
