@@ -195,6 +195,28 @@ function isHomeOpen() {
   return !!(homeView && !homeView.classList.contains("hidden"));
 }
 
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLocaleLowerCase("vi");
+}
+
+function getSearchHaystack(book) {
+  return normalizeSearchText([
+    book?.title,
+    book?.author,
+    Array.isArray(book?.tags) ? book.tags.join(" ") : "",
+    book?.desc
+  ].join(" "));
+}
+
+function isServerRenderedChapterRoute() {
+  return window.TRUYENFULLVN_PAGE?.mode === "chapter" && isBookRoutePath();
+}
+
 function shouldUseMobileTopbarEffect() {
   return isReaderOpen() || isHomeOpen();
 }
@@ -2015,12 +2037,30 @@ function highlightSuggestionText(value, keyword) {
   const q = String(keyword || "").trim();
   if (!q) return escapeHtml(text);
 
-  const index = text.toLocaleLowerCase("vi").indexOf(q.toLocaleLowerCase("vi"));
+  const normalizedQuery = normalizeSearchText(q);
+  if (!normalizedQuery) return escapeHtml(text);
+
+  let normalizedText = "";
+  const originalIndexByNormalizedIndex = [];
+
+  Array.from(text).forEach((char, charIndex) => {
+    const normalizedChar = normalizeSearchText(char);
+    for (let i = 0; i < normalizedChar.length; i += 1) {
+      originalIndexByNormalizedIndex.push(charIndex);
+    }
+    normalizedText += normalizedChar;
+  });
+
+  const index = normalizedText.indexOf(normalizedQuery);
   if (index < 0) return escapeHtml(text);
 
-  const before = text.slice(0, index);
-  const match = text.slice(index, index + q.length);
-  const after = text.slice(index + q.length);
+  const start = originalIndexByNormalizedIndex[index] ?? 0;
+  const end =
+    originalIndexByNormalizedIndex[index + normalizedQuery.length] ?? text.length;
+
+  const before = text.slice(0, start);
+  const match = text.slice(start, end);
+  const after = text.slice(end);
   return `${escapeHtml(before)}<mark>${escapeHtml(match)}</mark>${escapeHtml(after)}`;
 }
 
@@ -2065,25 +2105,34 @@ function renderSearchSuggestions(keyword) {
 }
 
 function getLocalSearchSuggestions(keyword, limit = 8) {
-  const q = String(keyword || "").trim().toLocaleLowerCase("vi");
+  const q = normalizeSearchText(String(keyword || "").trim());
   if (q.length < 2) return [];
 
   return books
     .filter((book) => {
-      const haystack = [
-        book.title,
-        book.author,
-        Array.isArray(book.tags) ? book.tags.join(" ") : ""
-      ].join(" ").toLocaleLowerCase("vi");
-      return haystack.includes(q);
+      return getSearchHaystack(book).includes(q);
     })
     .sort((a, b) => {
-      const aTitle = (a.title || "").toLocaleLowerCase("vi").startsWith(q) ? 1 : 0;
-      const bTitle = (b.title || "").toLocaleLowerCase("vi").startsWith(q) ? 1 : 0;
+      const aTitle = normalizeSearchText(a.title).startsWith(q) ? 1 : 0;
+      const bTitle = normalizeSearchText(b.title).startsWith(q) ? 1 : 0;
       return bTitle - aTitle || (b.views || 0) - (a.views || 0) || (b.popularity || 0) - (a.popularity || 0);
     })
     .slice(0, limit)
     .map(normalizeSuggestion);
+}
+
+function getLocalSearchResults(keyword, limit = 80) {
+  const q = normalizeSearchText(String(keyword || "").trim());
+  if (!q) return [];
+
+  return books
+    .filter((book) => getSearchHaystack(book).includes(q))
+    .sort((a, b) => {
+      const aTitle = normalizeSearchText(a.title).startsWith(q) ? 1 : 0;
+      const bTitle = normalizeSearchText(b.title).startsWith(q) ? 1 : 0;
+      return bTitle - aTitle || (b.views || 0) - (a.views || 0) || (b.popularity || 0) - (a.popularity || 0);
+    })
+    .slice(0, limit);
 }
 
 async function loadSearchSuggestions(keyword) {
@@ -2241,6 +2290,10 @@ async function searchBooksFromAPI(keyword, limit = 80) {
       )
     );
 
+    if (!searchResults.length) {
+      searchResults = getLocalSearchResults(q, limit);
+    }
+
     searchModeActive = true;
     showShelfOnly = false;
     activeChip = "all";
@@ -2257,9 +2310,12 @@ async function searchBooksFromAPI(keyword, limit = 80) {
     if (err.name === "AbortError") return;
 
     console.warn("Không tải được Search API, dùng tìm kiếm local:", err);
-    searchModeActive = false;
-    searchResults = [];
+    searchResults = getLocalSearchResults(q, limit);
+    searchModeActive = true;
+    showShelfOnly = false;
+    activeChip = "all";
     currentPage = 1;
+    updateCategoryActiveState();
     renderBooks();
   }
 }
@@ -2288,13 +2344,44 @@ function isLikelyEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
+function clearAutofilledInputEmail(input) {
+  if (!input) return false;
+
+  const value = input.value.trim();
+  if (!isLikelyEmail(value)) return false;
+
+  input.value = "";
+  hideSearchSuggestions();
+  return true;
+}
+
 function clearAutofilledAuthorEmail() {
-  if (!authorFilter) return;
+  clearAutofilledInputEmail(authorFilter);
+}
 
-  const value = authorFilter.value.trim();
-  if (!isLikelyEmail(value)) return;
+function clearAutofilledSearchEmail() {
+  clearAutofilledInputEmail(searchInput);
+}
 
-  authorFilter.value = "";
+function setupSearchInput() {
+  if (!searchInput) return;
+
+  searchInput.setAttribute("type", "search");
+  searchInput.setAttribute("name", "novelspace_search_query");
+  searchInput.setAttribute("autocomplete", "new-password");
+  searchInput.setAttribute("autocapitalize", "none");
+  searchInput.setAttribute("spellcheck", "false");
+  searchInput.setAttribute("inputmode", "search");
+  searchInput.readOnly = true;
+
+  const enableSearchInput = () => {
+    searchInput.readOnly = false;
+    clearAutofilledSearchEmail();
+  };
+
+  searchInput.addEventListener("focus", enableSearchInput);
+  searchInput.addEventListener("pointerdown", enableSearchInput);
+  searchInput.addEventListener("input", clearAutofilledSearchEmail);
 }
 
 function setupAuthorFilterInput() {
@@ -2362,6 +2449,7 @@ async function handleSearchSubmit() {
 
 
 function getFilteredBooks() {
+  clearAutofilledSearchEmail();
   clearAutofilledAuthorEmail();
   clearTransientSearchState();
 
@@ -2372,29 +2460,19 @@ function getFilteredBooks() {
     filtered = filtered.filter((book) => shelf.includes(Number(book.id)));
   }
 
-  const keyword = searchInput?.value?.trim().toLowerCase() || "";
-  const authorKeyword = authorFilter?.value?.trim().toLowerCase() || "";
+  const keyword = normalizeSearchText(searchInput?.value?.trim() || "");
+  const authorKeyword = normalizeSearchText(authorFilter?.value?.trim() || "");
   const sortValue = sortSelect?.value || "popular";
 
   if (keyword && !searchModeActive) {
     filtered = filtered.filter((book) => {
-      const title = (book.title || "").toLowerCase();
-      const author = (book.author || "").toLowerCase();
-      const tags = Array.isArray(book.tags) ? book.tags.join(" ").toLowerCase() : "";
-      const desc = (book.desc || "").toLowerCase();
-
-      return (
-        title.includes(keyword) ||
-        author.includes(keyword) ||
-        tags.includes(keyword) ||
-        desc.includes(keyword)
-      );
+      return getSearchHaystack(book).includes(keyword);
     });
   }
 
   if (authorKeyword) {
     filtered = filtered.filter((book) =>
-      (book.author || "").toLowerCase().includes(authorKeyword)
+      normalizeSearchText(book.author || "").includes(authorKeyword)
     );
   }
 
@@ -3104,6 +3182,12 @@ function resetToHomeMode() {
 
 function goHome(e) {
   if (e) e.preventDefault();
+
+  if (isServerRenderedChapterRoute()) {
+    window.location.assign("/");
+    return;
+  }
+
   closeMobilePanels();
   updateMobileToggleState();
   resetToHomeMode();
@@ -4277,6 +4361,7 @@ function initDomRefs() {
   continueToggleBtn = $("continueToggleBtn");
 
   setupAuthorFilterInput();
+  setupSearchInput();
 }
 
 let appBootstrapped = false;
