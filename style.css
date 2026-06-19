@@ -1954,6 +1954,13 @@ body.reader-mobile.topbar-hidden .topbar {
   box-shadow: 0 0 0 3px rgba(138, 61, 47, 0.12);
 }
 
+.audio-disclaimer {
+  flex: 0 0 100%;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 
 
 /* ===== ACCOUNT MODAL ===== */

@@ -1620,6 +1620,7 @@ def _render_hybrid_chapter_html(book, chapter, chapter_number: int, total_chapte
                 <option value="2">2x</option>
               </select>
             </label>
+            <div class="audio-disclaimer">Audio có thể lỗi ở một số đoạn, mong bạn thông cảm</div>
           </div>
         </section>
         """

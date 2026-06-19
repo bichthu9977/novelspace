@@ -2679,6 +2679,7 @@ function getChapterMediaHtml(chapter, chapterTitle) {
               <option value="2">2x</option>
             </select>
           </label>
+          <div class="audio-disclaimer">Audio có thể lỗi ở một số đoạn, mong bạn thông cảm</div>
       </div>
       <div class="chapter-media-note" id="chapterMediaNote">${escapeHtml(note)}</div>
     </section>
